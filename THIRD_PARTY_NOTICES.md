@@ -47,7 +47,8 @@ is not a cleared binary release.
 
 GlassOS/iFit applications and certificate/private-key assets are not
 distributed in this source repository. Local credentials are ignored by
-Git but packaged by Android into local APKs. Do not publish those APKs.
+Git but can be packaged into debug APKs. Do not publish those APKs. Release
+builds exclude them and use locally imported, app-private credentials.
 
 Plex, Netflix and browser applications are launched when installed, not
 bundled. No streaming video content is included.

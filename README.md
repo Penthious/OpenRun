@@ -35,6 +35,16 @@ existing GlassOS service for workout preparation and Pause/Stop operations.
 
 The current version is defined in [app/build.gradle.kts](app/build.gradle.kts).
 
+## Installation and releases
+
+Follow the [console installation guide](docs/INSTALL.md) for first-time
+privileged mode, Android debugging, OpenPelo installation and local credential
+import. The [release guide](docs/RELEASING.md) explains GitHub Actions and signing.
+
+Release builds exclude console credentials even when local debug assets exist.
+Import your own credential ZIP under Connections before using hardware controls.
+Debug builds may still package local developer credentials and must stay private.
+
 ## Requirements
 
 - Android 9 / API 28 or newer. Development hardware has a 1920×1080 display;
@@ -79,8 +89,8 @@ Use the ADB device selector if more than one device is connected. Installing
 an update restarts OpenRun. Updating with the reinstall flag preserves app
 data; uninstalling deletes local data.
 
-**Keep locally built APKs private.** Android packages the credential assets
-inside the APK even though Git ignores them. Do not attach such APKs to
+**Keep locally built debug APKs private.** Android packages the credential assets
+inside debug APKs even though Git ignores them. Release builds exclude those assets. Do not attach such APKs to
 GitHub releases, issues or CI artifacts.
 
 ## First run
@@ -175,6 +185,15 @@ Commit source, tests, documentation and Gradle configuration. The
 [ignore rules](.gitignore) exclude local credentials, environment files,
 signing keys, builds/caches, APKs and private workout exports. Keep personal
 backups under an ignored local-data/ or backups/ directory.
+
+Enable the repository’s pre-commit source check in each clone:
+
+~~~sh
+git config core.hooksPath .githooks
+~~~
+
+Private release signing material lives under the ignored secrets/release/
+directory. The [credential extraction example](docs/INSTALL.md#example-extract-from-your-installed-nordicftms-companion) writes only to secrets/glassos/.
 
 Before committing:
 

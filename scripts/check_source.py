@@ -47,4 +47,4 @@ if problems:
         print(f"BLOCKED: {name}: {reason}")
     sys.exit(1)
 print(f"PASS: checked {len(paths)} tracked/non-ignored source candidates and available staged content.")
-print("Local APKs still embed any supplied credential assets; keep them private.")
+print("Local debug APKs may embed supplied credential assets; keep them private.")

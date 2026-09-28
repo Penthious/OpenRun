@@ -55,6 +55,17 @@ class MainActivity: ComponentActivity() {
         if(result.values.all { it }) { app.heart.connect(app.store.state.value.profiles.firstOrNull { it.id==app.store.state.value.selectedId }?.strapAddress); app.heart.scan() }
         else app.message.value="Allow Bluetooth/location permissions to pair your chest strap."
     }
+    private val importCredentials=registerForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        if(uri!=null && app.active.value==null && !app.controlBusy.value) {
+            app.scope.launch {
+                val result=kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                    runCatching { contentResolver.openInputStream(uri)!!.use { ConsoleCredentials.install(this@MainActivity,it) } }
+                }
+                app.message.value=if(result.isSuccess) "Console credentials saved. Force stop and relaunch OpenRun before exercising. Delete the transferred ZIP from Downloads."
+                    else "Could not import credentials. Choose a ZIP with the three matching console PEM files."
+            }
+        }
+    }
     override fun onCreate(savedInstanceState:Bundle?) {
         super.onCreate(savedInstanceState)
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
@@ -454,6 +465,12 @@ class MainActivity: ComponentActivity() {
             Text("Wear your Garmin strap while pairing. Android 9 also needs Location enabled for Bluetooth scanning.",fontSize=13.sp,color=Muted)
         }
         key(profile.id) { GarminPanel(profile) }
+        Panel {
+            Text("Console credentials",fontSize=24.sp,fontWeight=FontWeight.Bold)
+            Text(if(ConsoleCredentials.installed(this@MainActivity)) "Local credentials installed." else if(BuildConfig.DEBUG) "Local developer assets may be used." else "Import credentials from your console before using treadmill controls.",color=Muted)
+            OutlinedButton(onClick={importCredentials.launch("application/zip")},enabled=active==null && !busy) { Text("Import console credentials") }
+            Text("Select a local ZIP containing the CA, client certificate and private key. Force stop and relaunch OpenRun after importing.",color=Muted)
+        }
         Panel {
             Text("Treadmill connection",fontSize=24.sp,fontWeight=FontWeight.Bold)
             Text(consoleStatus,color=Green)

@@ -11,8 +11,22 @@ android {
         applicationId = "dev.digitalducktape.openrun"
         minSdk = 28
         targetSdk = 34
-        versionCode = 25
-        versionName = "0.2.23"
+        versionCode = 26
+        versionName = "0.2.24"
+    }
+    // Only local debug builds may package developer credentials.
+    sourceSets.getByName("main").assets.setSrcDirs(emptyList<String>())
+    sourceSets.getByName("debug").assets.srcDir("src/main/assets")
+    signingConfigs {
+        create("distribution") {
+            System.getenv("OPENRUN_KEYSTORE")?.let { storeFile=file(it) }
+            storePassword=System.getenv("OPENRUN_STORE_PASSWORD")
+            keyAlias=System.getenv("OPENRUN_KEY_ALIAS")
+            keyPassword=System.getenv("OPENRUN_KEY_PASSWORD")
+        }
+    }
+    buildTypes.getByName("release") {
+        if(System.getenv("OPENRUN_KEYSTORE")!=null) signingConfig=signingConfigs.getByName("distribution")
     }
     compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
     kotlinOptions { jvmTarget = "17" }

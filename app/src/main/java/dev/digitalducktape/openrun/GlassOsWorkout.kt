@@ -60,10 +60,10 @@ object WorkoutWire {
 class GlassOsWorkout(private val context:Context) {
     private val channel by lazy {
         val factory=CertificateFactory.getInstance("X.509")
-        fun certificate(name:String)=context.assets.open("certs/$name").use { factory.generateCertificate(it) }
+        fun certificate(name:String)=ByteArrayInputStream(ConsoleCredentials.read(context,name)).use { factory.generateCertificate(it) }
         val ca=certificate("glassos_ca.pem")
         val client=certificate("glassos_client_cert.pem")
-        val pem=context.assets.open("certs/glassos_client_key.pem").bufferedReader().use { it.readText() }
+        val pem=ConsoleCredentials.read(context,"glassos_client_key.pem").toString(Charsets.UTF_8)
         val encoded=pem.replace("-----BEGIN PRIVATE KEY-----","").replace("-----END PRIVATE KEY-----","").replace(Regex("\\s"),"")
         val key=KeyFactory.getInstance("RSA").generatePrivate(PKCS8EncodedKeySpec(android.util.Base64.decode(encoded,android.util.Base64.DEFAULT)))
         val trust=KeyStore.getInstance(KeyStore.getDefaultType()).apply { load(null,null); setCertificateEntry("console",ca) }
