@@ -17,6 +17,6 @@ object TcxExporter {
             }
             append("</Track>")
         }
-        append("</Lap><Notes>OpenRun indoor workout. Estimated climbing: ${ride.ascentMeters.toInt()} m.</Notes></Activity></Activities></TrainingCenterDatabase>")
+        append("</Lap><Notes>OpenRun indoor workout. Estimated climbing: ${ride.ascentMeters.toInt()} m. Estimated descent: ${ride.descentMeters?.toInt()?.toString() ?: "unavailable"} m.</Notes></Activity></Activities></TrainingCenterDatabase>")
     }
 }

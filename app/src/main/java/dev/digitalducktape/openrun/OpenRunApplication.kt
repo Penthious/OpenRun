@@ -17,6 +17,11 @@ class OpenRunApplication : Application() {
     lateinit var schedule: GarminScheduleRepository
     lateinit var treadmill: Treadmill
     lateinit var heart: HeartRate
+    val pendingHike = MutableStateFlow<PendingHike?>(null)
+    val hikeStatus = MutableStateFlow<String?>(null)
+    var hike: HikeGuide? = null; private set
+    private var hikeDistanceOffset=0.0
+    val hikeDistance get()=if(warmup!=null) 0.0 else ((active.value?.distanceMeters ?: 0.0)-hikeDistanceOffset).coerceAtLeast(0.0)
     val active = MutableStateFlow<Ride?>(null)
     val paused = MutableStateFlow(false)
     val message = MutableStateFlow<String?>(null)
@@ -36,7 +41,8 @@ class OpenRunApplication : Application() {
     val paceStatus=MutableStateFlow<Map<Long,String>>(emptyMap())
 
     val manualMaxMph get() = planned?.workout?.maxMph ?: 4.0
-    val manualMaxIncline get() = if(planned!=null) 3.0 else 20.0
+    val manualMinIncline get() = if(hike!=null) HikeLimits.MIN_INCLINE else 0.0
+    val manualMaxIncline get() = hike?.selection?.maxIncline ?: if(planned!=null) 3.0 else 20.0
     val controlBusy = MutableStateFlow(false)
     val manualAdjusting = MutableStateFlow(false)
     val manualTargets = MutableStateFlow<List<Target>>(emptyList())
@@ -90,6 +96,16 @@ class OpenRunApplication : Application() {
                     else if(target!=null && !controlBusy.value) performControl {
                         if(applyTarget(target)) guide.confirmed(SystemClock.elapsedRealtime(),treadmill.telemetry.value)
                     }
+                } else if(active.value!=null && hike!=null) {
+                    val guide=hike!!;val t=treadmill.telemetry.value
+                    val target=guide.tick(SystemClock.elapsedRealtime(),(active.value!!.distanceMeters-hikeDistanceOffset).coerceAtLeast(0.0),t,isFresh(t),paused.value,controlBusy.value)
+                    hikeStatus.value=guide.status
+                    if(guide.complete && !guideFinishHandled) {
+                        guideFinishHandled=true;pauseWorkout()
+                        message.value="Hike complete. Belt stopping; choose End to save or discard."
+                    } else if(target!=null) performControl {
+                        if(applyTarget(target)) guide.confirmed(SystemClock.elapsedRealtime(),treadmill.telemetry.value.incline)
+                    }
                 } else if(active.value!=null && planned!=null) {
                     val guide=planned!!
                     val t=treadmill.telemetry.value
@@ -114,6 +130,7 @@ class OpenRunApplication : Application() {
     fun selectProfile(id: Long) {
         if (active.value != null || controlBusy.value) return
         val profile = store.state.value.profiles.firstOrNull { it.id == id } ?: return
+        pendingHike.value=null
         store.update { it.copy(selectedId = id) }; heart.connect(profile.strapAddress)
     }
     fun pair(address: String, name: String) {
@@ -122,13 +139,13 @@ class OpenRunApplication : Application() {
         store.update { s -> s.copy(profiles = s.profiles.map { if(it.id == id) it.copy(strapAddress = address, strapName = name) else it }) }
         heart.connect(address)
     }
-    fun startRecording(workout: SavedWorkout? = null) {
+    fun startRecording(workout: SavedWorkout? = null, hikeName:String? = null) {
         if (active.value != null) return
         val id = store.state.value.selectedId ?: return
         val t = treadmill.telemetry.value
         if (t.receivedAt == 0L || SystemClock.elapsedRealtime()-t.receivedAt > 5000) { message.value = "Connect NordicFTMS before recording."; return }
         val now = System.currentTimeMillis()
-        val ride = Ride(maxOf(now, (store.state.value.rides.maxOfOrNull { it.id } ?: 0) + 1),id,now,plannedWorkout=workout,utcOffsetSeconds=java.time.ZoneId.of(store.state.value.profiles.first { it.id==id }.scheduleTimeZone).rules.getOffset(java.time.Instant.ofEpochMilli(now)).totalSeconds)
+        val ride = Ride(maxOf(now, (store.state.value.rides.maxOfOrNull { it.id } ?: 0) + 1),id,now,descentMeters=0.0,hikeName=hikeName,plannedWorkout=workout,utcOffsetSeconds=java.time.ZoneId.of(store.state.value.profiles.first { it.id==id }.scheduleTimeZone).rules.getOffset(java.time.Instant.ofEpochMilli(now)).totalSeconds)
         store.save(ride); active.value = ride; paused.value = false; lastMeter = t.meters
         recording = scope.launch {
             var activeMillis = 0L
@@ -146,9 +163,10 @@ class OpenRunApplication : Application() {
                 activeMillis += dt
                 val distance = current.distanceMeters + delta
                 val ascent = current.ascentMeters + delta * ((raw.incline.takeIf { fresh } ?: 0.0).coerceAtLeast(0.0) / 100.0)
+                val descent = (current.descentMeters ?: 0.0) + delta * (-(raw.incline.takeIf { fresh } ?: 0.0)).coerceAtLeast(0.0) / 100.0
                 val elapsed = (activeMillis / 1000).toInt()
-                val sample = RideSample(System.currentTimeMillis(),elapsed,distance,raw.mph?.takeIf { fresh }?.times(0.44704),raw.incline.takeIf { fresh },heart.bpm.value,ascent,planned?.index?.takeIf { planned?.complete == false && warmup==null },warmup!=null)
-                val next = current.copy(durationSec=elapsed,distanceMeters=distance,ascentMeters=ascent,samples=current.samples+sample)
+                val sample = RideSample(System.currentTimeMillis(),elapsed,distance,raw.mph?.takeIf { fresh }?.times(0.44704),raw.incline.takeIf { fresh },heart.bpm.value,ascent,planned?.index?.takeIf { planned?.complete == false && warmup==null },warmup!=null,descentMeters=descent)
+                val next = current.copy(durationSec=elapsed,distanceMeters=distance,ascentMeters=ascent,descentMeters=descent,samples=current.samples+sample)
                 active.value=next
                 if (elapsed % 5 == 0) withContext(Dispatchers.IO) { store.save(next) }
             }
@@ -167,7 +185,7 @@ class OpenRunApplication : Application() {
         enableZoneWhenReady()
     }
     private fun enableZoneWhenReady(warmedUp:Boolean=false) {
-        if(planned!=null) { message.value="End the planned workout before enabling Zone 2."; return }
+        if(planned!=null || hike!=null) { message.value="End the guided workout before enabling Zone 2."; return }
         if(!controlsVerified.value || active.value==null || paused.value) return
         val t=treadmill.telemetry.value
         if(!isFresh(t) || t.mph==null || t.mph<0.2 || t.mph>4.05 || t.incline==null || t.incline !in 0.0..20.0) {
@@ -193,6 +211,7 @@ class OpenRunApplication : Application() {
         }
     }
     private fun controlFailed() {
+                hike?.halt();hikeStatus.value=hike?.status
                 warmup?.halt(); warmupStatus.value=warmup?.status
                 planned?.halt("Command failed · guide paused; use physical controls")
                 plannedStatus.value=planned?.status
@@ -210,7 +229,7 @@ class OpenRunApplication : Application() {
         controlStatus.value=when(target) { is Target.Speed -> if(target.value==0.0) "Stopping belt…" else "Setting speed to ${target.value} mph…"; is Target.Incline -> "Setting incline to ${target.value}%…" }
         check(target.value.isFinite() && when(target) {
             is Target.Speed -> target.value == 0.0 || target.value in 0.2..manualMaxMph
-            is Target.Incline -> target.value in 0.0..manualMaxIncline
+            is Target.Incline -> target.value in manualMinIncline..manualMaxIncline
         })
         controls.send(target,endWorkout)
         // A protocol acknowledgment is not proof that GlassOS applied the command.
@@ -220,10 +239,10 @@ class OpenRunApplication : Application() {
             while(matches<3) {
                 delay(500)
                 val t=treadmill.telemetry.value
-                if(isFresh(t) && !(target is Target.Speed && target.value==0.0) && target.overridden(origin,t)) {
+                if(isFresh(t) && !(target is Target.Speed && target.value==0.0) && target.overridden(origin,t,ignoreRunningSpeedChange=hike!=null && warmup==null && target is Target.Incline)) {
                     if((t.mph ?: 0.0)<0.2) disableZone() else zone.manual(SystemClock.elapsedRealtime())
                     zoneStatus.value=zone.status
-                    if(warmup==null) planned?.manual(); warmup?.manual()
+                    hike?.manual(target,SystemClock.elapsedRealtime()); if(warmup==null) planned?.manual(); warmup?.manual()
                     if((t.mph ?: 0.0)<0.2) { warmup?.halt() }; if((t.mph ?: 0.0)<0.2) planned?.halt("Belt stopped · pause and resume to continue guide")
                     return@withTimeout false
                 }
@@ -241,13 +260,13 @@ class OpenRunApplication : Application() {
         val observed=if(speed) treadmill.telemetry.value.mph else treadmill.telemetry.value.incline
         val base=manualTargets.value.lastOrNull { (it is Target.Speed)==speed }?.value ?: observed ?: return
         val next=kotlin.math.round((base+delta)*10)/10
-        manualTarget(if(speed) Target.Speed(next.coerceIn(0.0,manualMaxMph)) else Target.Incline(next.coerceIn(0.0,manualMaxIncline)))
+        manualTarget(if(speed) Target.Speed(next.coerceIn(0.0,manualMaxMph)) else Target.Incline(next.coerceIn(manualMinIncline,manualMaxIncline)))
     }
     fun manualTarget(target: Target) {
         if(target is Target.Speed && target.value==0.0) { pauseWorkout(); return }
         if((controlBusy.value && !manualAdjusting.value) || paused.value) return
-        if(!target.value.isFinite() || (target is Target.Incline && target.value !in 0.0..manualMaxIncline) || (target is Target.Speed && target.value !in 0.2..manualMaxMph)) return
-        if(warmup==null) planned?.manual(); warmup?.manual()
+        if(!target.value.isFinite() || (target is Target.Incline && target.value !in manualMinIncline..manualMaxIncline) || (target is Target.Speed && target.value !in 0.2..manualMaxMph)) return
+        hike?.manual(target,SystemClock.elapsedRealtime()); if(warmup==null) planned?.manual(); warmup?.manual()
         if(!isFresh(treadmill.telemetry.value)) { message.value="Wait for the treadmill connection before adjusting."; return }
         if(target is Target.Speed && (treadmill.telemetry.value.mph ?: 0.0)<0.2) {
             message.value="Use Start workout or Resume to start the belt."; return
@@ -325,7 +344,7 @@ class OpenRunApplication : Application() {
             }
             if(paceOwner(profileId)!=owner) return@withLock false
             val state=store.state.value
-            val rides=state.rides.filter { it.profileId==profileId && it.status=="complete" && it.startedAt>now-AdaptivePace.AGE_MS }
+            val rides=state.rides.filter { it.profileId==profileId && it.status=="complete" && it.hikeName==null && it.startedAt>now-AdaptivePace.AGE_MS }
             remote=remote.filterNot { segment -> rides.any { segment.timestamp in it.startedAt..(it.samples.lastOrNull()?.timestamp ?: it.startedAt) } }
             val merged=(remote+rides.flatMap { AdaptivePace.local(it) }).filter { it.timestamp>=now-AdaptivePace.AGE_MS }.sortedBy { it.timestamp }
             val ranges=(state.workouts.filter { it.profileId==profileId }.flatMap { it.steps }+
@@ -357,6 +376,8 @@ class OpenRunApplication : Application() {
     }
     private fun finishWarmup() {
         warmup=null; warmingUp.value=false; warmupStatus.value=null
+        hikeDistanceOffset=active.value?.distanceMeters ?: 0.0
+        hike?.resume(SystemClock.elapsedRealtime())
         planned?.resume(SystemClock.elapsedRealtime())
         if(zoneAfterWarmup) { zoneAfterWarmup=false; enableZoneWhenReady(warmedUp=true) }
     }
@@ -419,6 +440,46 @@ class OpenRunApplication : Application() {
             if(warmup!=null) warmup?.resume(SystemClock.elapsedRealtime()) else guide.resume(SystemClock.elapsedRealtime()); paused.value=false
         }
     }
+    fun queueHike(saved:SavedHike,maxIncline:Double):Boolean {
+        if(active.value!=null || controlBusy.value) { message.value="End the current workout before choosing a hike.";return false }
+        val owner=store.state.value.selectedId ?: run { message.value="Choose a runner in OpenRun first.";return false }
+        if(!saved.route.hasElevation || !maxIncline.isFinite() || maxIncline !in 0.0..HikeLimits.MAX_INCLINE) return false
+        pendingHike.value=PendingHike(saved,owner,maxIncline);return true
+    }
+    fun startHike() {
+        val selected=pendingHike.value ?: return
+        if(active.value!=null || controlBusy.value || selected.profileId!=store.state.value.selectedId) return
+        if(!controlsVerified.value) { message.value="Verify treadmill controls under Connections first.";return }
+        val t=treadmill.telemetry.value
+        if(!isFresh(t) || t.mph==null || t.mph>0.05 || t.incline==null || t.incline !in HikeLimits.MIN_INCLINE..selected.maxIncline) {
+            message.value="Stop the belt and set incline within this hike’s limit before starting.";return
+        }
+        val addWarmup=store.state.value.profiles.first { it.id==selected.profileId }.warmupEnabled
+        if(addWarmup && t.incline !in 0.0..3.0) { message.value="Set incline to 0–3% before warm-up.";return }
+        val guide=HikeGuide(selected)
+        startRecording(hikeName=selected.hike.name)
+        if(active.value==null) return
+        hike=guide;hikeDistanceOffset=0.0;guideFinishHandled=false;pendingHike.value=null
+        disableZone();paused.value=true;resumeMph=2.0
+        if(addWarmup) beginWarmup(2.0,null)
+        startForegroundService(Intent(this,WorkoutService::class.java).setAction("record"))
+        performControl {
+            controlStatus.value="Preparing hike in 3 seconds…";delay(3000)
+            glass.prepareToRun()
+            // Align the route before starting the belt; a failed incline command must
+            // never fall through to a speed command. Warm-up retains its gentle grade.
+            if(warmup==null) {
+                val initial=Target.Incline(guide.startingIncline)
+                if(!initial.matches(treadmill.telemetry.value) && !applyTarget(initial)) {
+                    guide.halt();return@performControl
+                }
+                guide.confirmed(SystemClock.elapsedRealtime(),treadmill.telemetry.value.incline)
+            }
+            if(!applyTarget(Target.Speed(2.0))) { guide.halt();return@performControl }
+            paused.value=false
+            if(warmup!=null) warmup?.resume(SystemClock.elapsedRealtime()) else guide.resume(SystemClock.elapsedRealtime())
+        }
+    }
     fun pauseWorkout() {
         warmup?.pause()
         planned?.pause()
@@ -434,14 +495,16 @@ class OpenRunApplication : Application() {
     }
     fun resumeWorkout() {
         if(active.value==null || !paused.value || controlBusy.value) return
-        if(planned?.complete==true) { message.value="Guide complete. Use End workout to save or discard."; return }
+        if(planned?.complete==true || hike?.complete==true) { message.value="Guide complete. Use End workout to save or discard."; return }
         val t=treadmill.telemetry.value
-        if(!isFresh(t) || t.incline==null || t.incline !in 0.0..manualMaxIncline) { message.value="Check the treadmill connection and incline before resuming."; return }
+        if(!isFresh(t) || t.incline==null || t.incline !in manualMinIncline..manualMaxIncline) { message.value="Check the treadmill connection and incline before resuming."; return }
+        if(warmup!=null && t.incline !in 0.0..3.0) { message.value="Set incline to 0–3% before resuming warm-up.";return }
         performControl {
             controlStatus.value="Resuming in 3 seconds…"; delay(3000)
             glass.prepareToRun()
             if(!applyTarget(Target.Speed(resumeMph))) return@performControl
             if(warmup!=null) warmup?.resume(SystemClock.elapsedRealtime()) else planned?.resume(SystemClock.elapsedRealtime())
+            hike?.resume(SystemClock.elapsedRealtime())
             paused.value=false
             if(resumeZone && heart.bpm.value!=null) { zone.enable(SystemClock.elapsedRealtime()); zoneEnabled.value=true; zoneStatus.value=zone.status }
             resumeZone=false
@@ -462,11 +525,12 @@ class OpenRunApplication : Application() {
         // Wait for any in-flight autosave before saving or deleting the final session.
         recording?.cancelAndJoin(); recording=null
         val ride=active.value ?: return
-        if(save) store.save(ride.copy(status="complete",guideCompleted=planned?.complete == true))
+        if(save) store.save(ride.copy(status="complete",guideCompleted=planned?.complete == true || hike?.complete == true))
         else store.update { state -> state.copy(rides=state.rides.filterNot { it.id==ride.id }) }
         active.value=null; paused.value=false
         warmup=null; warmingUp.value=false; warmupStatus.value=null; zoneAfterWarmup=false
         if(save) scope.launch(Dispatchers.IO) { refreshPaces(ride.profileId,localOnly=true) }
+        hike=null;hikeStatus.value=null
         planned=null; plannedName.value=null; plannedStatus.value=null
         if(save) GarminSyncWorker.enqueue(this)
         message.value=if(save) "Belt stopped. Workout saved to this profile." else "Belt stopped. Workout discarded; nothing saved or uploaded."

@@ -112,6 +112,8 @@ object FitExporter {
             messageIndex = 0; startTime = time(ride.startedAt); timestamp = time(end)
             sport = Sport.RUNNING; subSport = SubSport.TREADMILL
             totalElapsedTime = (end - ride.startedAt) / 1000f; totalTimerTime = ride.durationSec.toFloat()
+            totalAscent = ride.ascentMeters.coerceIn(0.0,65534.0).toInt()
+            ride.descentMeters?.takeIf { it.isFinite() }?.let { totalDescent = it.coerceIn(0.0,65534.0).toInt() }
             totalDistance = ride.distanceMeters.toFloat(); firstLapIndex = 0; numLaps = groups.size
             event = Event.SESSION; eventType = EventType.STOP
         })

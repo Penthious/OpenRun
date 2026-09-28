@@ -228,3 +228,11 @@ their own licenses, including the Garmin FIT SDK's
 See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for dependency and tooling
 references. OpenRun is not affiliated with or endorsed by iFIT, NordicTrack,
 Garmin, Plex or Netflix.
+
+### Outdoor hikes
+
+Download GPX tracks on the treadmill and use **Entertainment → Outdoor Trails**.
+The Android 9 Downloads scanner keeps a local hike library. Start a hike directly
+or queue it, open Plex, and start from the floating menu. Terrain adjusts incline
+within your chosen cap while speed stays manual. See [Outdoor Trails](docs/OUTDOOR_TRAILS.md)
+for setup and control behavior.

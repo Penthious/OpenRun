@@ -62,6 +62,22 @@ class FitExporterTest {
         assertEquals(activity.timestamp.timestamp-21600,activity.localTimestamp)
         assertEquals(Manufacturer.DEVELOPMENT,FileIdMesg(messages.first()).manufacturer)
     }
+    @Test fun `hike FIT includes ascent and descent as session fields`() {
+        val hike=ride.copy(plannedWorkout=null,hikeName="Trail",ascentMeters=125.0,descentMeters=84.0)
+        val messages=decode(FitExporter.export(hike,samples))
+        val session=SessionMesg(messages.single { it.num==MesgNum.SESSION })
+        assertEquals(125,session.totalAscent)
+        assertEquals(84,session.totalDescent)
+        assertEquals(SubSport.TREADMILL,session.subSport)
+        assertFalse(messages.any { it.num==MesgNum.WORKOUT })
+        assertEquals(hike,Json.decodeFromString<Ride>(Json.encodeToString(hike)))
+    }
+    @Test fun `legacy rides do not claim a measured zero descent`() {
+        val old=Json.decodeFromString<Ride>("""{"id":1,"profileId":1,"startedAt":1000}""")
+        assertNull(old.descentMeters)
+        val session=SessionMesg(decode(FitExporter.export(ride,samples)).single { it.num==MesgNum.SESSION })
+        assertNull(session.totalDescent)
+    }
     @Test fun `old history deserializes and new snapshots survive restart`() {
         val old=Json.decodeFromString<Ride>("""{"id":1,"profileId":1,"startedAt":1000}""")
         assertNull(old.plannedWorkout)

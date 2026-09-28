@@ -2,13 +2,17 @@ package dev.digitalducktape.openrun
 import org.junit.Assert.*
 import org.junit.Test
 class ControlProtocolTest {
+    @Test fun signedHikeInclineLimits() {
+        assertArrayEquals(byteArrayOf(3,-60,-1),ControlProtocol.command(Target.Incline(-6.0)))
+        assertArrayEquals(byteArrayOf(3,-112,1),ControlProtocol.command(Target.Incline(40.0)))
+    }
     @Test fun `two mph converts to kph hundredths`() {
         assertArrayEquals(byteArrayOf(2,66,1),ControlProtocol.command(Target.Speed(2.0)))
         assertArrayEquals(byteArrayOf(2,73,6),ControlProtocol.command(Target.Speed(10.0)))
         assertArrayEquals(byteArrayOf(3,-56,0),ControlProtocol.command(Target.Incline(20.0)))
     }
     @Test fun `out of bounds and nonfinite targets rejected`() {
-        listOf(Target.Speed(0.0),Target.Speed(10.1),Target.Speed(-.1),Target.Incline(20.1),Target.Incline(-.5),Target.Speed(Double.NaN)).forEach { target ->
+        listOf(Target.Speed(0.0),Target.Speed(10.1),Target.Speed(-.1),Target.Incline(40.1),Target.Incline(-6.1),Target.Speed(Double.NaN)).forEach { target ->
             try { ControlProtocol.command(target); fail("Accepted unsafe target") } catch(_:IllegalArgumentException) { }
         }
     }

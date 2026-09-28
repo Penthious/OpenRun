@@ -136,7 +136,7 @@ class GarminSyncManager(
     private suspend fun discover(account: GarminAccount) {
         for (ride in rides.rides().filter { it.profileId == account.profileId && it.id > account.afterRideId && it.durationSec > 0 }) {
             if (_state.value.uploads.any { it.profileId == account.profileId && it.email == account.email && it.rideId == ride.id }) continue
-            val format = if (ride.plannedWorkout != null) "fit" else "tcx"
+            val format = if (ride.plannedWorkout != null || ride.hikeName != null) "fit" else "tcx"
             val fingerprint = fingerprint(payload(ride, rides.samples(ride.id), format))
             if (_state.value.uploads.none { it.profileId == account.profileId && it.email == account.email && it.fingerprint == fingerprint }) {
                 upload(GarminUpload(account.profileId, account.email, ride.id, fingerprint, format = format))

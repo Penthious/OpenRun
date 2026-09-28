@@ -15,12 +15,12 @@ import kotlin.math.roundToInt
 sealed class Target(val value: Double) {
     class Speed(mph: Double): Target(mph)
     class Incline(percent: Double): Target(percent)
-    fun overridden(origin: Telemetry, current: Telemetry): Boolean {
+    fun overridden(origin: Telemetry, current: Telemetry, ignoreRunningSpeedChange: Boolean = false): Boolean {
         val start = if(this is Speed) origin.mph else origin.incline
         val observed = if(this is Speed) current.mph else current.incline
         if(start==null || observed==null) return false
         val otherChanged=if(this is Speed) origin.incline!=null && current.incline!=null && kotlin.math.abs(origin.incline-current.incline)>0.08
-            else origin.mph!=null && current.mph!=null && kotlin.math.abs(origin.mph-current.mph)>0.05
+            else origin.mph!=null && current.mph!=null && kotlin.math.abs(origin.mph-current.mph)>0.05 && (!ignoreRunningSpeedChange || current.mph<0.2)
         val tolerance=if(this is Speed) 0.08 else 0.15
         return otherChanged || observed<minOf(start,value)-tolerance || observed>maxOf(start,value)+tolerance
     }
@@ -34,7 +34,7 @@ object ControlProtocol {
         require(target.value.isFinite())
         val raw=when(target) {
             is Target.Speed -> { require(target.value > 0.0 && target.value <= 10.0); (target.value*1.609344*100).roundToInt() }
-            is Target.Incline -> { require(target.value in 0.0..20.0); (target.value*10).roundToInt() }
+            is Target.Incline -> { require(target.value in HikeLimits.MIN_INCLINE..HikeLimits.MAX_INCLINE); (target.value*10).roundToInt() }
         }
         return byteArrayOf(if(target is Target.Speed) 2 else 3,raw.toByte(),(raw shr 8).toByte())
     }

@@ -108,7 +108,7 @@ class WorkoutService : Service() {
     }
     private fun currentIdleSignature(): String = listOf(
         app.store.state.value.selectedId, app.store.state.value.profiles, todayWorkouts(),
-        app.heart.bpm.value!=null, app.controlsVerified.value, app.controlBusy.value
+        app.pendingHike.value?.let { listOf(it.hike.id,it.profileId,it.maxIncline) }, app.heart.bpm.value!=null, app.controlsVerified.value, app.controlBusy.value
     ).toString()
 
     private fun showIdlePanel() {
@@ -139,7 +139,7 @@ class WorkoutService : Service() {
             } else profile?.name ?: "Choose a runner in OpenRun"))
             val pending=pendingStart
             if(pending!=null) {
-                root.addView(label("${pending.first} · Belt starts at 2 mph after a 3-second countdown."))
+                root.addView(label("${pending.first} · 3-second countdown, then belt starts at 2 mph. Hikes set starting incline first unless warming up."))
                 button("Start belt & workout",!busy && profile!=null) {
                     pendingStart=null
                     pending.second()
@@ -148,6 +148,16 @@ class WorkoutService : Service() {
                 }
                 button("Cancel") { pendingStart=null; showPanel() }
             } else {
+                app.pendingHike.value?.takeIf { it.profileId==profile?.id }?.let { selected ->
+                    button("Start hike · ${selected.hike.name}",!busy && app.controlsVerified.value) {
+                        choose(selected.hike.name) { app.startHike() }
+                    }
+                    button("Clear hike",!busy) { app.pendingHike.value=null;showPanel() }
+                }
+                button("Hikes",!busy) {
+                    startActivity(Intent(this,OutdoorActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                    removePanel();if(app.active.value==null) stopSelf()
+                }
                 button("Start workout",!busy && profile!=null) { choose("Manual workout") { app.startWorkout() } }
                 button("Zone 2",!busy && profile!=null && app.controlsVerified.value && app.heart.bpm.value!=null) {
                     choose("Zone 2") { app.startWorkout(withZoneTwo=true) }
@@ -167,7 +177,8 @@ class WorkoutService : Service() {
             })
             idleStatus=label(when {
                 busy -> app.controlStatus.value
-                app.heart.bpm.value==null -> "Connect your chest strap for Zone 2 and guided workouts."
+                app.pendingHike.value!=null -> "Hike ready · speed stays manual; incline follows the trail. HR strap optional."
+                app.heart.bpm.value==null -> "Connect your chest strap for Zone 2 and Garmin guided workouts."
                 !app.controlsVerified.value -> "Verify controls in OpenRun → Connections for guided workouts."
                 else -> "Choose your show, then start when ready."
             }).also { root.addView(it) }
@@ -205,7 +216,7 @@ class WorkoutService : Service() {
         val incline=if(fresh) t.incline?.let { String.format(Locale.US,"%.1f",it) } ?: "—" else "—"
         val run=app.active.value
         val time=run?.durationSec ?: 0
-        stats?.text=String.format(Locale.US,"%s mph    %s%% incline    %.2f mi    ♥ %s    %d:%02d%s",speed,incline,(run?.distanceMeters ?: 0.0)/1609.344,hr,time/60,time%60,if(app.paused.value) " · PAUSED" else "") + "\n" + if(app.controlBusy.value) app.controlStatus.value else app.warmupStatus.value ?: app.plannedStatus.value ?: app.zoneStatus.value
+        stats?.text=String.format(Locale.US,"%s mph    %s%% incline    %.2f mi    ♥ %s    %d:%02d%s",speed,incline,(run?.distanceMeters ?: 0.0)/1609.344,hr,time/60,time%60,if(app.paused.value) " · PAUSED" else "") + "\n" + if(app.controlBusy.value) app.controlStatus.value else app.warmupStatus.value ?: app.hikeStatus.value ?: app.plannedStatus.value ?: app.zoneStatus.value
     }
     private fun removePanel() { panel?.let { runCatching { window.removeView(it) } }; panel=null; idlePanel=false; idleStatus=null; stats=null; pauseButton=null; endButton=null; skipButton=null }
     override fun onDestroy() { scope.cancel(); removePanel(); super.onDestroy() }
