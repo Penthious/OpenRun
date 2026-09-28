@@ -11,11 +11,12 @@ android {
         applicationId = "dev.digitalducktape.openrun"
         minSdk = 28
         targetSdk = 34
-        versionCode = 36
-        versionName = "0.2.34"
+        versionCode = 37
+        versionName = "0.2.35"
     }
     // Only local debug builds may package developer credentials.
     sourceSets.getByName("main").assets.setSrcDirs(emptyList<String>())
+    sourceSets.getByName("main").resources.srcDir("../third_party")
     sourceSets.getByName("debug").assets.srcDir("src/main/assets")
     signingConfigs {
         create("distribution") {

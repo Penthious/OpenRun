@@ -79,8 +79,8 @@ See [OpenPelo's app instructions](https://github.com/doudar/OpenPelo#2-install-a
 **Signature mismatch:** cancel rather than choosing Uninstall & Reinstall
 if you want to preserve history. Local debug builds and official release
 builds normally have different signing identities. Existing debug users
-need a data-migration plan before changing identities; OpenRun does not yet
-have a general backup/restore UI.
+must [back up and migrate their data](UPDATES_AND_BACKUPS.md) before changing
+identities. Versions 0.2.35 and later include an Updates & backup screen.
 
 ## 4. Import your local console credentials
 

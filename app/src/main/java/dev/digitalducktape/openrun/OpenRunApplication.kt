@@ -12,6 +12,8 @@ import kotlinx.coroutines.sync.withLock
 
 class OpenRunApplication : Application() {
     val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    val maintenance = MutableStateFlow(false)
+    lateinit var updates: AppUpdates
     lateinit var store: RunStore
     lateinit var garmin: GarminSyncManager
     lateinit var schedule: GarminScheduleRepository
@@ -79,6 +81,8 @@ class OpenRunApplication : Application() {
         )
         GarminSyncWorker.scheduleRecovery(this)
         GarminHistoryWorker.schedule(this)
+        updates = AppUpdates(this)
+        AppUpdateWorker.schedule(this)
         treadmill.start()
         scope.launch {
             try { val state=glass.state(); consoleStatus.value="Console connected · workout state $state"; android.util.Log.i("OpenRunControl","Read-only console connection verified; workout state=$state") }
@@ -140,7 +144,7 @@ class OpenRunApplication : Application() {
         heart.connect(address)
     }
     fun startRecording(workout: SavedWorkout? = null, hikeName:String? = null) {
-        if (active.value != null) return
+        if (active.value != null || maintenance.value) return
         val id = store.state.value.selectedId ?: return
         val t = treadmill.telemetry.value
         if (t.receivedAt == 0L || SystemClock.elapsedRealtime()-t.receivedAt > 5000) { message.value = "Connect NordicFTMS before recording."; return }
@@ -195,7 +199,7 @@ class OpenRunApplication : Application() {
         zone.enable(SystemClock.elapsedRealtime(),warmedUp); zoneEnabled.value=true; zoneStatus.value=zone.status
     }
     private fun performControl(preempt: Boolean=false, block: suspend ()->Unit) {
-        if(controlBusy.value && !preempt) return
+        if((controlBusy.value || maintenance.value) && !preempt) return
         if(preempt) {
             manualTargets.value=emptyList(); manualAdjusting.value=false
             controlJob?.cancel()

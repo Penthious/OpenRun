@@ -39,9 +39,13 @@ do not imply that a dependency is packaged.
 - Android Gradle plugin:
   [license](https://android.googlesource.com/platform/tools/base/+/mirror-goog-studio-main/LICENSE).
 
-For binary distribution, inspect the licenses/notices shipped with the exact
-resolved versions, including transitive dependencies. This source repository
-is not a cleared binary release.
+The exact resolved runtime inventory is in [third_party/DEPENDENCIES.txt](third_party/DEPENDENCIES.txt).
+License and notice texts in that directory are bundled into the APK and
+attached to releases. Most runtime dependencies use Apache-2.0; checker-qual
+and animal-sniffer annotations use MIT. Garmin FIT SDK retains its separate
+FIT Protocol License Agreement. Review that agreement before distributing
+a binary that includes the SDK; the OpenRun Apache license does not grant
+rights to Garmin’s SDK.
 
 ## Local-only components
 

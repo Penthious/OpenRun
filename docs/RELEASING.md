@@ -7,7 +7,7 @@
 - Release APK runs on a version tag such as v0.2.24. The tag must match
   versionName. It tests, builds/signs the release, checks for credential
   assets/private keys, verifies the APK signature, and creates a **draft**
-  GitHub release containing the APK, SHA-256 checksum and notices.
+  GitHub release containing the APK, SHA-256 checksum, update.json manifest and notices.
 
 Drafts allow an installation/control smoke test and dependency-notice review
 before publishing a hardware-control application. A failed check prevents
@@ -80,3 +80,26 @@ Hooks and ignore rules can be deliberately bypassed; they are safeguards,
 not an absolute filesystem boundary. CI also runs the source checker.
 Ignored files are not copied by cloning the repository. Losing this local
 directory means losing this backup; protect the containing disk accordingly.
+
+## Local signed builds and updater metadata
+
+Run `python3 scripts/build_signed.py` to use the permanent key locally, with
+JDK 17 and the Android SDK configured. See [updates and migration](UPDATES_AND_BACKUPS.md).
+The release workflow generates update.json from the versioned Gradle config
+and actual APK checksum. Keep that manifest attached when publishing: the
+in-app updater requires it and only installs a newer, matching-signer APK.
+
+The configured permanent release certificate SHA-256 fingerprint is:
+
+~~~text
+4cef2d578ad3add71a623f94c037115da468b39abb5f7cd4c9cd7d674ae61129
+~~~
+
+This fingerprint is public; the private key stays in the release environment
+secrets and the ignored local backup. `apksigner verify --print-certs` can
+verify a downloaded release against it.
+
+The first draft currently retains the Garmin FIT SDK dependency. Review its
+[exact-version license](../third_party/FIT-SDK-LICENSE.txt), particularly the
+use/distribution restrictions, before making that binary public. Do not treat
+the inclusion of license text as a distribution clearance.

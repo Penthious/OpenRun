@@ -156,7 +156,7 @@ class MainActivity: ComponentActivity() {
         var name by remember { mutableStateOf("") }
         val profile=saved.profiles.firstOrNull { it.id==saved.selectedId }
         Row(Modifier.fillMaxSize().background(Background).padding(28.dp),horizontalArrangement=Arrangement.spacedBy(30.dp)) {
-            Column(Modifier.width(230.dp).fillMaxHeight()) {
+            Column(Modifier.width(230.dp).fillMaxHeight().padding(bottom=48.dp)) {
                 Text("OPENRUN",color=Green,fontSize=27.sp,fontWeight=FontWeight.Black,letterSpacing=3.sp)
                 Text("YOUR PACE. YOUR SPACE.",fontSize=10.sp,color=Muted,letterSpacing=1.sp)
                 Spacer(Modifier.height(42.dp))
@@ -181,7 +181,8 @@ class MainActivity: ComponentActivity() {
                     Button(onClick={ending=true},modifier=Modifier.fillMaxWidth().height(54.dp)) { Text("End workout") }
                 }
                 TextButton(onClick=onSleep,enabled=active==null || app.paused.collectAsState().value,modifier=Modifier.fillMaxWidth()) { Text("Sleep screen",color=Muted) }
-                Text("OPENRUN ${BuildConfig.VERSION_NAME}",color=Muted,fontSize=12.sp)
+                val update by app.updates.state.collectAsState()
+                TextButton(onClick={startActivity(Intent(this@MainActivity,MaintenanceActivity::class.java))}) { Text(if(update.ready!=null) "Update available" else "${BuildConfig.VERSION_NAME} · Updates & backup",fontSize=12.sp,color=if(update.ready!=null) Green else Muted) }
             }
             Column(Modifier.weight(1f).fillMaxHeight().verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(20.dp)) {
                 Row(verticalAlignment=Alignment.CenterVertically) {

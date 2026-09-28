@@ -93,6 +93,14 @@ data; uninstalling deletes local data.
 inside debug APKs even though Git ignores them. Release builds exclude those assets. Do not attach such APKs to
 GitHub releases, issues or CI artifacts.
 
+## Updates and backups
+
+Open **Updates & backup** in the sidebar. OpenRun checks published GitHub
+releases on startup and daily, downloads verified updates, and lets you install
+them after ending your workout. Android still asks for installation confirmation.
+You can also export and restore profiles, history, planned workouts and hikes.
+See [updates, backup migration and local signed builds](docs/UPDATES_AND_BACKUPS.md).
+
 ## First run
 
 1. Create a runner profile and pair a chest strap under **Connections**.
