@@ -12,3 +12,7 @@ existing app to resolve a signature mismatch unless you accept losing its data.
 
 Garmin Coach credit remains unverified. This is an experimental console
 integration; verify physical Start/Pause/Stop behavior on your own equipment.
+
+The FIT SDK APK-bundling question has been resolved using Garmin's direct
+clarification. The SDK retains its own license; see the
+[distribution review](https://github.com/Penthious/OpenRun/blob/main/docs/GARMIN_FIT_LICENSE_REVIEW.md).

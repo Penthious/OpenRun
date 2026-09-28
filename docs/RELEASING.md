@@ -99,7 +99,7 @@ This fingerprint is public; the private key stays in the release environment
 secrets and the ignored local backup. `apksigner verify --print-certs` can
 verify a downloaded release against it.
 
-The first draft currently retains the Garmin FIT SDK dependency. Review its
-[exact-version license](../third_party/FIT-SDK-LICENSE.txt), particularly the
-use/distribution restrictions, before making that binary public. Do not treat
-the inclusion of license text as a distribution clearance.
+The initial FIT SDK distribution hold is resolved by Garmin's direct
+clarification that bundling the SDK in an Android APK is permitted. See the
+[recorded review and primary sources](GARMIN_FIT_LICENSE_REVIEW.md). Retain
+its separate license and notices, and recheck when changing SDK versions or use.
