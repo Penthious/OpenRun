@@ -1,0 +1,46 @@
+.gradle/
+.kotlin/
+**/build/
+local.properties
+*.jks
+*.keystore
+
+# Local GlassOS mTLS assets from the installed companion; never commit.
+app/src/main/assets/certs/
+
+# Local credentials and signing material, including copies outside assets
+*.pem
+*.key
+*.p12
+*.pfx
+*.der
+*.crt
+*.cer
+.env
+.env.*
+!.env.example
+credentials/
+secrets/
+
+# Local builds may embed GlassOS credentials: never publish them
+*.apk
+*.aab
+*.apks
+*.xapk
+*.zip
+
+# Device exports and local-only data
+local-data/
+backups/
+captures/
+*.fit
+*.tcx
+*.db
+*.db-shm
+*.db-wal
+*.log
+
+# Editor/machine state
+.idea/
+*.iml
+.DS_Store

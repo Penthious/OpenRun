@@ -1,0 +1,13 @@
+OpenRide acknowledgment
+
+OpenRide (https://github.com/Penthious/OpenRide) was the base example and
+inspiration for OpenRun's on-device fitness experience, runner profiles,
+entertainment workflow and optional Garmin integration.
+
+OpenRun is an independent implementation. No OpenRide application source
+code was copied into this repository. This acknowledgment credits the
+reference project; it does not claim that OpenRun is a fork of OpenRide
+or that OpenRide's authors endorse OpenRun.
+
+OpenRun's license is in LICENSE. Dependency and build-tool references
+are in THIRD_PARTY_NOTICES.md.
