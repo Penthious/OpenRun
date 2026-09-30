@@ -26,6 +26,7 @@ class HikeLibrary(context:Context) {
         if(!titleFile.exists() || titleFile.readText()=="Previously imported hike") titleFile.writeText(title)
         return SavedHike(id,titleFile.readText(),route)
     }
+    @Synchronized fun recent(limit:Int=5):List<SavedHike> = list().sortedWith(compareByDescending<SavedHike> { File(directory,"${it.id}.gpx").lastModified() }.thenBy { it.id }).take(limit.coerceAtLeast(0))
     @Synchronized fun list():List<SavedHike> = directory.listFiles().orEmpty().filter { it.extension=="gpx" }.mapNotNull { file ->
         runCatching { SavedHike(file.nameWithoutExtension,File(directory,"${file.nameWithoutExtension}.txt").takeIf { it.exists() }?.readText() ?: "Imported hike",file.inputStream().use(TrailGpx::parse)) }.getOrNull()
     }.sortedBy { it.name }

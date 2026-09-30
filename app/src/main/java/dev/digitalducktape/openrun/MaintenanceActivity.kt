@@ -89,7 +89,7 @@ class MaintenanceActivity: ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
-            MaterialTheme(colorScheme = darkColorScheme()) {
+            MaterialTheme(colorScheme = openRunColors()) {
                 Surface(Modifier.fillMaxSize()) {
                     val update by app.updates.state.collectAsState()
                     val active by app.active.collectAsState()
@@ -120,7 +120,7 @@ class MaintenanceActivity: ComponentActivity() {
                     }
                     pending?.let { snapshot ->
                         AlertDialog(onDismissRequest = { pending = null }, title = { Text("Restore your backup?") }, text = { Text("${snapshot.state.profiles.size} profiles, ${snapshot.state.rides.size} workouts and ${snapshot.hikes.keys.count { it.endsWith(".gpx") }} hikes. Garmin will need a new login.") }, confirmButton = {
-                            Button(onClick = { pending = null; operation { AppBackup.restore(app, snapshot); notice = "Backup restored. Return to OpenRun and reconnect Garmin under Connections." } }) { Text("Restore") }
+                            Button(onClick = { pending = null; operation { AppBackup.restore(app, snapshot); notice = "Backup restored. Return to OpenRun and reconnect Garmin under Settings." } }) { Text("Restore") }
                         }, dismissButton = { TextButton(onClick = { pending = null }) { Text("Cancel") } })
                     }
                     notice?.let { AlertDialog(onDismissRequest = { notice = null }, title = { Text("OpenRun") }, text = { Text(it) }, confirmButton = { TextButton(onClick = { notice = null }) { Text("OK") } }) }

@@ -78,6 +78,15 @@ class FitExporterTest {
         val session=SessionMesg(decode(FitExporter.export(ride,samples)).single { it.num==MesgNum.SESSION })
         assertNull(session.totalDescent)
     }
+    @Test fun `custom distance intervals retain FIT duration and prescribed speed`() {
+        val custom=WorkoutDraft(owner=1,intervals=listOf(IntervalDraft(distance=true,amount="0.25"))).workout()
+        val messages=decode(FitExporter.export(ride.copy(plannedWorkout=custom),samples))
+        val step=WorkoutStepMesg(messages.single { it.num==MesgNum.WORKOUT_STEP })
+        assertEquals(WktStepDuration.DISTANCE,step.durationType)
+        assertEquals(402.336,step.durationDistance.toDouble(),.01)
+        assertEquals(WktStepTarget.SPEED,step.targetType)
+        assertEquals(4*.44704,step.customTargetSpeedLow.toDouble(),.002)
+    }
     @Test fun `old history deserializes and new snapshots survive restart`() {
         val old=Json.decodeFromString<Ride>("""{"id":1,"profileId":1,"startedAt":1000}""")
         assertNull(old.plannedWorkout)

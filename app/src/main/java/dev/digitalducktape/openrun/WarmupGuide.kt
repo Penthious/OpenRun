@@ -4,7 +4,7 @@ import kotlin.math.abs
 import kotlin.math.min
 
 /** Five one-minute stages. Skipping ends this prelude, not any prescribed Garmin step. */
-class WarmupGuide(private val pace: Double, private val ceiling: Int?) {
+class WarmupGuide(private val pace: Double, private val ceiling: Int?, private val requiresHeartRate:Boolean=true) {
     var elapsed = 0L; private set
     var finished = false; private set
     var halted = false; private set
@@ -32,11 +32,11 @@ class WarmupGuide(private val pace: Double, private val ceiling: Int?) {
         previous=t
         val seconds=((300_000-elapsed+999)/1000).toInt()
         status="Warm-up ${stage+1}/5 · ${seconds/60}:${"%02d".format(seconds%60)} left · goal ${"%.1f".format(goal)} mph"
-        if(hr==null) { status+=" · HR disconnected, holding"; nextAt=now+10_000; return null }
+        if(hr==null && requiresHeartRate) { status+=" · HR disconnected, holding"; nextAt=now+10_000; return null }
         if(manualStage==stage) { status+=" · manual hold"; return null }
         if(busy || now<nextAt) return null
         cooldown=5_000; nextAt=now+cooldown
-        if(ceiling!=null && hr>ceiling) {
+        if(ceiling!=null && hr!=null && hr>ceiling) {
             cooldown=30_000; nextAt=now+cooldown
             return if(t.incline>1.05) Target.Incline((t.incline-.5).coerceAtLeast(1.0))
                 else if(t.mph>2.05) Target.Speed((t.mph-.1).coerceAtLeast(2.0)) else null

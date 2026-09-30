@@ -37,7 +37,7 @@ internal fun historySummary(ride: Ride): HistorySummary {
 }
 private fun number(value:Double?,digits:Int=1)=value?.let { String.format(Locale.US,"%.${digits}f",it) } ?: "—"
 private fun time(seconds:Int)="${seconds/60}:${(seconds%60).toString().padStart(2,'0')}"
-private val ChartMuted=Color(0xFF9EAEA1)
+private val ChartMuted:Color @Composable get()=MaterialTheme.colorScheme.onSurfaceVariant
 
 @Composable internal fun WorkoutHistoryDetails(ride:Ride) {
     val summary=remember(ride) { historySummary(ride) }
@@ -81,7 +81,8 @@ private val ChartMuted=Color(0xFF9EAEA1)
     val high=maxOf(low+1.0,(extent.maxOrNull() ?: 1.0)+(if(hrTarget) 10.0 else 0.5))
     val duration=maxOf(ride.durationSec,samples.lastOrNull()?.elapsedSec ?: 0,1)
     var selected by remember(ride.id) { mutableStateOf<Int?>(null) }
-    Column(modifier.background(Color(0xFF101713),RoundedCornerShape(12.dp)).padding(16.dp),verticalArrangement=Arrangement.spacedBy(8.dp)) {
+    val gridColor=ChartMuted.copy(alpha=.16f)
+    Column(modifier.background(MaterialTheme.colorScheme.background,RoundedCornerShape(12.dp)).padding(16.dp),verticalArrangement=Arrangement.spacedBy(8.dp)) {
         Text(title,fontSize=20.sp,color=color)
         val index=selected?.takeIf { it in samples.indices }
         Text(if(index!=null) "${time(samples[index].elapsedSec)} · ${number(values[index],if(hrTarget) 0 else 1)} $unit" else "$unit · tap to inspect",color=ChartMuted,fontSize=14.sp)
@@ -91,7 +92,7 @@ private val ChartMuted=Color(0xFF9EAEA1)
         }) {
             fun x(sec:Int)=sec.toFloat()/duration*size.width
             fun y(v:Double)=size.height-((v-low)/(high-low)*size.height).toFloat()
-            repeat(4) { n -> val yy=size.height*n/3; drawLine(ChartMuted.copy(alpha=.16f),Offset(0f,yy),Offset(size.width,yy)) }
+            repeat(4) { n -> val yy=size.height*n/3; drawLine(gridColor,Offset(0f,yy),Offset(size.width,yy)) }
             samples.forEachIndexed { i,s ->
                 val target=targets[i]
                 val end=samples.getOrNull(i+1)

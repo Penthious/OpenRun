@@ -18,6 +18,9 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
@@ -32,6 +35,7 @@ class OutdoorActivity: ComponentActivity() {
     private val app get()=application as OpenRunApplication
     private val library by lazy { HikeLibrary(this) }
     private var hikes by mutableStateOf<List<SavedHike>>(emptyList())
+    private var requestedHikeId:String?=null
     private var selected by mutableStateOf<SavedHike?>(null)
     private var maxIncline by mutableStateOf(HikeLimits.MAX_INCLINE)
     private var showImportHelp by mutableStateOf(false)
@@ -50,6 +54,9 @@ class OutdoorActivity: ComponentActivity() {
     private val picker = registerForActivityResult(ActivityResultContracts.GetContent()) { uri -> uri?.let { importRoute(it) } }
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        requestedHikeId=intent.getStringExtra("hike_id")
+        selected=app.hike?.selection?.hike
+        preview=selected?.route
         setContent {
             val active by app.active.collectAsState()
             val controlling by app.controlBusy.collectAsState()
@@ -59,8 +66,8 @@ class OutdoorActivity: ComponentActivity() {
             val saved by app.store.state.collectAsState()
             val profile=saved.profiles.firstOrNull { it.id==saved.selectedId }
 
-            MaterialTheme(colorScheme=darkColorScheme(primary=Color(0xFFB7EF79))) {
-                Surface(Modifier.fillMaxSize()) {
+            MaterialTheme(colorScheme=openRunColors()) {
+                Surface(Modifier.fillMaxSize(),color=MaterialTheme.colorScheme.background) {
                     Column(Modifier.padding(32.dp).verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(16.dp)) {
                         Row(horizontalArrangement=Arrangement.spacedBy(20.dp)) {
                             Text("Outdoor Trails",fontSize=30.sp)
@@ -79,6 +86,7 @@ class OutdoorActivity: ComponentActivity() {
                             text={Text("After the 3-second countdown, incline is set to the trail’s starting grade before the belt starts at 2 mph (unless warming up). Incline follows terrain up to ${maxIncline.toInt()}%. Downhill sections follow terrain down to −6%. You control speed.")},
                             confirmButton={TextButton(onClick={confirmStart=false;selected?.let { if(app.queueHike(it,maxIncline)) { app.startHike();if(app.active.value!=null) { startActivity(Intent(this@OutdoorActivity,MainActivity::class.java));finish() } } }}) { Text("Start belt & hike") }},
                             dismissButton={TextButton(onClick={confirmStart=false}) { Text("Cancel") }})
+                        if(selected==null) {
                         Row(horizontalArrangement=Arrangement.spacedBy(16.dp)) {
                             Button(onClick={browse()}) { Text("Browse AllTrails") }
                             Button(enabled=!busy,onClick={picker.launch("*/*")}) { Text("Import file") }
@@ -89,15 +97,29 @@ class OutdoorActivity: ComponentActivity() {
                         TextButton(onClick={showImportHelp=!showImportHelp}) { Text(if(showImportHelp) "Hide import help" else "How to add hikes") }
                         if(showImportHelp) Text("In AllTrails: sign in → choose a trail → Hit the trail → Export map file → GPX Track. You can also open a downloaded GPX with OpenRun.")
                         Text(if(scanEnabled) "Downloads are checked automatically while this view is open and when you return." else "Use Import file to add GPX hikes.")
-                        pending?.let { Text("Ready for ${profile?.name ?: "runner"}: ${it.hike.name} · start from the Plex overlay",color=Color(0xFFB7EF79)) }
-                        hikes.forEach { savedHike ->
-                            OutlinedButton(onClick={selected=savedHike;preview=savedHike.route},modifier=Modifier.fillMaxWidth()) {
-                                Text("${savedHike.name} · %.2f mi%s".format(savedHike.route.distanceMeters/1609.344,if(savedHike.route.hasElevation) "" else " · missing elevation"))
+                        }
+                        pending?.let { Text("Ready for ${profile?.name ?: "runner"}: ${it.hike.name} · start from the Plex overlay",color=MaterialTheme.colorScheme.primary) }
+                        if(selected!=null) TextButton(onClick={selected=null;preview=null}) { Text("← All trails") }
+                        hikes.filter { selected==null || selected?.id==it.id }.forEach { savedHike ->
+                            Surface(color=MaterialTheme.colorScheme.surface,shape=RoundedCornerShape(20.dp),modifier=Modifier.fillMaxWidth()) {
+                                Row(Modifier.padding(20.dp),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(24.dp)) {
+                                    TrailThumbnail(savedHike.route,Modifier.width(180.dp).height(110.dp))
+                                    Column(Modifier.weight(1f),verticalArrangement=Arrangement.spacedBy(8.dp)) {
+                                        Text(savedHike.name,fontSize=23.sp,fontWeight=FontWeight.Bold)
+                                        val totals=remember(savedHike.id) {
+                                            savedHike.route.points.zipWithNext().mapNotNull { (a,b) -> if(a.elevation!=null && b.elevation!=null) b.elevation-a.elevation else null }
+                                        }
+                                        Text("%.2f mi".format(savedHike.route.distanceMeters/1609.344)+if(savedHike.route.hasElevation) " · ↑ %.0f ft · ↓ %.0f ft".format(totals.filter { it>0 }.sum()*3.28084,-totals.filter { it<0 }.sum()*3.28084) else " · Elevation unavailable",color=MaterialTheme.colorScheme.onSurfaceVariant,fontSize=17.sp)
+                                        Text("Elevation totals estimated from GPX",color=MaterialTheme.colorScheme.onSurfaceVariant,fontSize=12.sp)
+                                    }
+                                    if(selected==null) OutlinedButton(onClick={selected=savedHike;preview=savedHike.route}) { Text("View trail") }
+                                }
                             }
                         }
                         if(hikes.isEmpty()) Text("No hikes yet. Download a GPX Track from AllTrails to get started.")
                         selected?.let { chosen ->
                             if(active==null) {
+                                Text("Start here, or queue for Plex and start from the overlay. Queueing does not move the belt.",color=MaterialTheme.colorScheme.primary)
                                 Text("Maximum incline: ${maxIncline.toInt()}% · decline down to −6% · start speed 2 mph")
                                 Row(horizontalArrangement=Arrangement.spacedBy(12.dp)) {
                                     listOf(3.0,5.0,10.0,15.0,20.0,30.0,40.0).forEach { cap ->
@@ -110,7 +132,11 @@ class OutdoorActivity: ComponentActivity() {
                                 }
                                 Row(horizontalArrangement=Arrangement.spacedBy(12.dp)) {
                                     Button(enabled=chosen.route.hasElevation && !controlling,onClick={confirmStart=true}) { Text("Start hike") }
-                                    Button(enabled=chosen.route.hasElevation && !controlling,onClick={if(app.queueHike(chosen,maxIncline)) openPlex()}) { Text("Queue hike & open Plex") }
+                                    OutlinedButton(enabled=chosen.route.hasElevation && !controlling,onClick={if(app.queueHike(chosen,maxIncline)) openPlex()}) { Text("Queue for Plex") }
+                                }
+                                when {
+                                    !chosen.route.hasElevation -> Text("Start and queue unavailable: import a GPX track with elevation.",color=MaterialTheme.colorScheme.onSurfaceVariant)
+                                    controlling -> Text("Start and queue unavailable while treadmill controls are updating.",color=MaterialTheme.colorScheme.onSurfaceVariant)
                                 }
                             }
                         }
@@ -159,7 +185,9 @@ class OutdoorActivity: ComponentActivity() {
             } }
             result.onSuccess { (found,errors) ->
                 hikes=found
-                if(selected==null) { selected=app.hike?.selection?.hike ?: app.pendingHike.value?.hike ?: found.firstOrNull();preview=selected?.route }
+                requestedHikeId?.let { id ->
+                    selected=found.firstOrNull { it.id==id };preview=selected?.route;requestedHikeId=null
+                }
                 message=if(errors.isEmpty()) "${found.size} saved hikes" else "${found.size} saved hikes. Could not read: ${errors.joinToString().take(300)}"
             }.onFailure { message="Could not scan hikes: ${it.message}" }
             busy=false

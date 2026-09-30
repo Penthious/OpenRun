@@ -56,7 +56,7 @@ object AdaptivePace {
         val limited=previous?.let { estimate.coerceIn(it.mph-.3,it.mph+.3) } ?: estimate
         return LearnedPace(low,high,round(limited*10)/10,runs.flatMap { it }.map { it.hr }.average(),runs.size)
     }
-    fun prepare(plan:SavedWorkout,history:PaceHistory?):SavedWorkout = plan.copy(steps=plan.steps.map { step ->
+    fun prepare(plan:SavedWorkout,history:PaceHistory?):SavedWorkout = if(plan.custom) plan else plan.copy(steps=plan.steps.map { step ->
         val learned=history?.learned?.firstOrNull { it.low==step.hrLow && it.high==step.hrHigh }
         val pace=when {
             step.paceLowMph!=null && step.paceHighMph!=null -> (step.paceLowMph+step.paceHighMph)/2

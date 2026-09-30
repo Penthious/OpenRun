@@ -36,10 +36,10 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-private val Green=Color(0xFFB7EF79)
-private val Background=Color(0xFF101713)
-private val Surface=Color(0xFF1D2821)
-private val Muted=Color(0xFF9EAEA1)
+private val Green:Color @Composable get()=MaterialTheme.colorScheme.primary
+private val Background:Color @Composable get()=MaterialTheme.colorScheme.background
+private val Surface:Color @Composable get()=MaterialTheme.colorScheme.surface
+private val Muted:Color @Composable get()=MaterialTheme.colorScheme.onSurfaceVariant
 class MainActivity: ComponentActivity() {
     private val app get()=application as OpenRunApplication
     private val sleeping = mutableStateOf(false)
@@ -73,7 +73,7 @@ class MainActivity: ComponentActivity() {
         if(checkSelfPermission(blePermission)==android.content.pm.PackageManager.PERMISSION_GRANTED) {
             app.heart.connect(app.store.state.value.profiles.firstOrNull { it.id==app.store.state.value.selectedId }?.strapAddress)
         }
-        setContent { MaterialTheme(colorScheme=darkColorScheme(primary=Green,onPrimary=Background,background=Background,surface=Surface,onSurface=Color.White)) { Surface(color=Background,contentColor=Color.White) {
+        setContent { MaterialTheme(colorScheme=openRunColors()) { Surface(color=Background,contentColor=Color.White) {
             Box(Modifier.fillMaxSize()) {
                 AppScreen(onSleep={ enterSleep() })
                 if(sleeping.value) Box(Modifier.fillMaxSize().background(Color.Black).clickable {
@@ -122,9 +122,8 @@ class MainActivity: ComponentActivity() {
     @Composable private fun Entertainment() {
         val active by app.active.collectAsState()
         Panel {
-            Button(onClick={startActivity(Intent(this@MainActivity,OutdoorActivity::class.java))}) { Text("Outdoor Trails") }
             Text("WATCH & UNWIND",color=Muted,fontSize=12.sp,letterSpacing=2.sp)
-            Text("Something good\nto move to.",fontSize=25.sp,fontWeight=FontWeight.Bold)
+            Text("Watch while you move.",fontSize=25.sp,fontWeight=FontWeight.Bold)
             // Some consoles host Plex under the Netflix package for launcher compatibility.
             val netflixIsPlex=packageManager.getLaunchIntentForPackage("com.netflix.mediaclient")?.component?.className?.contains("plex",ignoreCase=true)==true
             val apps=listOf(
@@ -148,72 +147,179 @@ class MainActivity: ComponentActivity() {
         val active by app.active.collectAsState()
         val busy by app.controlBusy.collectAsState()
         val notice by app.message.collectAsState()
-        var tab by remember { mutableStateOf("Workout") }
-        LaunchedEffect(resumeGeneration.value) { if(app.hike!=null && app.active.value!=null) tab="Workout" }
-        var ending by remember { mutableStateOf(false) }
         val pausedSession by app.paused.collectAsState()
+        var tab by remember { mutableStateOf("Home") }
+        var progressHistory by remember { mutableStateOf(false) }
+        var switching by remember { mutableStateOf(false) }
+        var ending by remember { mutableStateOf(false) }
         var adding by remember { mutableStateOf(false) }
         var name by remember { mutableStateOf("") }
         val profile=saved.profiles.firstOrNull { it.id==saved.selectedId }
-        Row(Modifier.fillMaxSize().background(Background).padding(28.dp),horizontalArrangement=Arrangement.spacedBy(30.dp)) {
-            Column(Modifier.width(230.dp).fillMaxHeight().padding(bottom=48.dp)) {
-                Text("OPENRUN",color=Green,fontSize=27.sp,fontWeight=FontWeight.Black,letterSpacing=3.sp)
-                Text("YOUR PACE. YOUR SPACE.",fontSize=10.sp,color=Muted,letterSpacing=1.sp)
-                Spacer(Modifier.height(42.dp))
-                Text("RUNNER",fontSize=11.sp,color=Muted,letterSpacing=2.sp)
-                Spacer(Modifier.height(12.dp))
-                Column(Modifier.weight(1f).verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(8.dp)) {
-                    saved.profiles.forEach { p ->
-                        Surface(shape=RoundedCornerShape(12.dp),color=if(p.id==profile?.id) Green else Surface,modifier=Modifier.fillMaxWidth().clickable(enabled=active==null && !busy) { app.selectProfile(p.id) }) {
-                            Text(p.name,Modifier.padding(16.dp),color=if(p.id==profile?.id) Background else Color.White,fontWeight=FontWeight.Bold)
-                        }
-                    }
-                    TextButton(onClick={adding=true},enabled=active==null && !busy) { Text("+ Add profile") }
-                    if(active!=null) Text("End recording to switch runners.",fontSize=12.sp,color=Muted)
-                    Spacer(Modifier.height(24.dp))
-                    listOf("Workout","Outdoor Trails","Entertainment","Planned workouts","History","Connections").forEach { label ->
-                        TextButton(onClick={if(label=="Outdoor Trails") startActivity(Intent(this@MainActivity,OutdoorActivity::class.java)) else tab=label},modifier=Modifier.fillMaxWidth()) { Text(label,color=if(tab==label) Green else Muted,fontSize=18.sp) }
+        LaunchedEffect(resumeGeneration.value) { if(app.hike!=null && app.active.value!=null) tab="Home" }
+        Row(Modifier.fillMaxSize().background(Background).padding(24.dp),horizontalArrangement=Arrangement.spacedBy(28.dp)) {
+            Column(Modifier.width(230.dp).fillMaxHeight(),verticalArrangement=Arrangement.spacedBy(12.dp)) {
+                Text("OPENRUN",color=Green,fontSize=27.sp,fontWeight=FontWeight.Black,letterSpacing=3.sp,modifier=Modifier.padding(vertical=14.dp))
+                Surface(shape=RoundedCornerShape(18.dp),color=Surface,modifier=Modifier.fillMaxWidth().clickable(enabled=active==null && !busy) { switching=true }) {
+                    Row(Modifier.padding(18.dp),verticalAlignment=Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) { Text("YOUR PROFILE",fontSize=10.sp,color=Muted,letterSpacing=1.sp); Text(profile?.name ?: "Choose runner",fontSize=21.sp,fontWeight=FontWeight.Bold) }
+                        Text("⌄",color=Green,fontSize=24.sp)
                     }
                 }
-                Button(onClick={app.pauseWorkout()},modifier=Modifier.fillMaxWidth().height(60.dp),shape=RoundedCornerShape(14.dp),colors=ButtonDefaults.buttonColors(containerColor=Color(0xFFB64236),contentColor=Color.White)) { Text("STOP BELT",fontSize=17.sp,fontWeight=FontWeight.Bold) }
-                if(active!=null) {
-                    OutlinedButton(onClick={if(pausedSession) app.resumeWorkout() else app.pauseWorkout()},enabled=!pausedSession || !busy,modifier=Modifier.fillMaxWidth().height(54.dp)) { Text(if(pausedSession) "Resume workout" else "Pause workout") }
-                    Button(onClick={ending=true},modifier=Modifier.fillMaxWidth().height(54.dp)) { Text("End workout") }
-                }
-                TextButton(onClick=onSleep,enabled=active==null || app.paused.collectAsState().value,modifier=Modifier.fillMaxWidth()) { Text("Sleep screen",color=Muted) }
-                val update by app.updates.state.collectAsState()
-                TextButton(onClick={startActivity(Intent(this@MainActivity,MaintenanceActivity::class.java))}) { Text(if(update.ready!=null) "Update available" else "${BuildConfig.VERSION_NAME} · Updates & backup",fontSize=12.sp,color=if(update.ready!=null) Green else Muted) }
-            }
-            Column(Modifier.weight(1f).fillMaxHeight().verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(20.dp)) {
-                Row(verticalAlignment=Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f)) { Text(if(profile==null) "Make room for your next run." else when(tab) { "History"->"${profile.name}’s workouts"; "Connections"->"Connected to you."; "Entertainment"->"Make time for a good show."; else->if(active!=null) "${profile.name}’s session" else "Ready when you are, ${profile.name}." },fontSize=32.sp,fontWeight=FontWeight.Bold); Text("A little movement. A good show. Your own space.",color=Muted,fontSize=16.sp) }
-                    Text("OPENRUN / 01",color=Muted,fontSize=12.sp)
-                }
-                if(profile==null) {
-                    Panel { Text("Start with a profile",fontSize=24.sp); Text("Keep each person’s workouts, chest strap, and Garmin account together.",color=Muted); Button(onClick={adding=true}) { Text("Create your profile") } }
-                } else when(tab) {
-                    "Workout"->{
-                        if(active==null) {
-                            Row(horizontalArrangement=Arrangement.spacedBy(20.dp),verticalAlignment=Alignment.Top) {
-                                Column(Modifier.weight(1f)) { key(profile.id) { HomeSchedule(profile,onConnections={tab="Connections"}) } }
-                                Column(Modifier.width(310.dp)) { Entertainment() }
+                if(active!=null) Text("Profile locked during workout",color=Muted,fontSize=12.sp)
+                Spacer(Modifier.height(8.dp))
+                Column(Modifier.weight(1f).verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(10.dp)) {
+                    listOf("Home" to "Your next session","Workouts" to "Plans & intervals","Trails" to "Explore your routes","Progress" to "Trends & history","Settings" to "Devices & accounts").forEach { (label,description) ->
+                        val selected=tab==label
+                        Surface(color=if(selected) MaterialTheme.colorScheme.surfaceVariant else Color.Transparent,shape=RoundedCornerShape(16.dp),modifier=Modifier.fillMaxWidth().clickable {
+                            if(label=="Trails") startActivity(Intent(this@MainActivity,OutdoorActivity::class.java)) else tab=label
+                        }) {
+                            Row(Modifier.padding(horizontal=12.dp,vertical=14.dp),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(12.dp)) {
+                                Box(Modifier.width(4.dp).height(38.dp).background(if(selected) Green else Color.Transparent,RoundedCornerShape(2.dp)))
+                                Column(verticalArrangement=Arrangement.spacedBy(3.dp)) {
+                                Text(if(label=="Home" && active!=null) "Live workout" else label,fontSize=20.sp,fontWeight=FontWeight.SemiBold,color=Color.White)
+                                Text(description,fontSize=12.sp,color=Muted)
+                                }
                             }
                         }
-                        Workout(profile, onSleep)
                     }
-                    "Entertainment"->Row(horizontalArrangement=Arrangement.spacedBy(20.dp)) { Column(Modifier.width(420.dp)) { Entertainment() }; Column(Modifier.weight(1f)) { Panel { Text("Keep your run in view",fontSize=24.sp); Text("Choose your show first. The floating menu offers manual, Zone 2 and today’s Garmin workouts. Once started, your live metrics and controls follow you into the player.",color=Muted) } } }
-                    "History"->History(profile)
-                    "Planned workouts"->key(profile.id) { PlannedWorkouts(profile,onStarted={tab="Workout"}) }
-                    else->Connections(profile)
+                }
+                OutlinedButton(onClick={tab="Watch"},modifier=Modifier.fillMaxWidth().height(52.dp)) { Text("Watch Plex & more",fontSize=16.sp) }
+                if(active!=null) {
+                    Button(onClick={if(pausedSession) app.resumeWorkout() else app.pauseWorkout()},enabled=!pausedSession || !busy,modifier=Modifier.fillMaxWidth().height(58.dp)) { Text(if(pausedSession) "Resume workout" else "Pause workout",fontSize=17.sp) }
+                    OutlinedButton(onClick={ending=true},modifier=Modifier.fillMaxWidth().height(54.dp)) { Text("End workout",fontSize=17.sp) }
+                }
+                Button(onClick={app.pauseWorkout()},modifier=Modifier.fillMaxWidth().height(64.dp),shape=RoundedCornerShape(16.dp),colors=ButtonDefaults.buttonColors(containerColor=Color(0xFFB64236),contentColor=Color.White)) { Text("STOP BELT",fontSize=18.sp,fontWeight=FontWeight.Bold) }
+                Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.SpaceBetween) {
+                    TextButton(onClick=onSleep,enabled=active==null || pausedSession) { Text("Sleep",color=Muted) }
+                    TextButton(onClick={startActivity(Intent(this@MainActivity,MaintenanceActivity::class.java))}) { Text(BuildConfig.VERSION_NAME,color=Muted,fontSize=12.sp) }
+                }
+            }
+            key(tab,profile?.id) {
+                Column(Modifier.weight(1f).fillMaxHeight().verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(22.dp)) {
+                    Row(Modifier.padding(vertical=10.dp),verticalAlignment=Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f),verticalArrangement=Arrangement.spacedBy(6.dp)) {
+                            Text(when(tab) { "Home"->if(active!=null) "Make this one yours." else "Ready, ${profile?.name ?: "runner"}?"; "Workouts"->"Find your next workout."; "Progress"->"See how far you’ve come."; "Settings"->"Everything connected."; else->"A good show. A great workout." },fontSize=34.sp,fontWeight=FontWeight.Bold)
+                            Text(when(tab) { "Home"->if(active!=null) "Your session is in progress. Controls are always on the left." else "Choose your pace, follow a plan, or put on your favorite show."; "Workouts"->"Your saved plans, ready when you are."; "Progress"->"${profile?.name ?: "Your"}’s progress, one session at a time."; "Settings"->"Manage your chest strap, Garmin account and treadmill."; else->"Your workout controls follow you into the player." },color=Muted,fontSize=16.sp)
+                        }
+                        if(active!=null && tab!="Home") Button(onClick={tab="Home"}) { Text("Return to workout") }
+                    }
+                    if(profile==null) Panel { Text("Start with a profile",fontSize=24.sp); Text("Your workouts, progress and Garmin account, together.",color=Muted); Button(onClick={adding=true}) { Text("Create profile") } }
+                    else when(tab) {
+                        "Home"->{
+                            Workout(profile,onSleep)
+                            if(active==null) Row(horizontalArrangement=Arrangement.spacedBy(22.dp),verticalAlignment=Alignment.Top) {
+                                Column(Modifier.weight(1f),verticalArrangement=Arrangement.spacedBy(22.dp)) { HomeSchedule(profile,onConnections={tab="Settings"}); RecentTrails() }
+                                Column(Modifier.width(350.dp),verticalArrangement=Arrangement.spacedBy(22.dp)) {
+                                    Entertainment()
+                                    HomeWeeklyProgress(profile,saved.rides,onOpen={progressHistory=false;tab="Progress"})
+                                }
+                            }
+                        }
+                        "Workouts"->PlannedWorkouts(profile,onStarted={tab="Home"})
+                        "Progress"->{
+                            Row(horizontalArrangement=Arrangement.spacedBy(12.dp)) {
+                                FilterChip(selected=!progressHistory,onClick={progressHistory=false},label={Text("Overview",fontSize=17.sp)})
+                                FilterChip(selected=progressHistory,onClick={progressHistory=true},label={Text("Workout history",fontSize=17.sp)})
+                            }
+                            key(progressHistory) { if(progressHistory) History(profile) else ProgressDashboard(profile,saved.rides) }
+                        }
+                        "Settings"->{
+                            Panel {
+                                Text("Color scheme",fontSize=24.sp,fontWeight=FontWeight.Bold)
+                                Text("Saved automatically for ${profile.name}. Each runner can choose their own look.",color=Muted)
+                                Row(horizontalArrangement=Arrangement.spacedBy(14.dp)) {
+                                    runPalettes.forEach { option ->
+                                        val chosen=runPalette(profile.colorScheme).id==option.id
+                                        Surface(color=Color(option.surface),shape=RoundedCornerShape(16.dp),border=androidx.compose.foundation.BorderStroke(if(chosen) 3.dp else 1.dp,if(chosen) Color(option.accent) else Color(0xFF657078)),modifier=Modifier.weight(1f).clickable { app.setColorScheme(option.id) }) {
+                                            Column(Modifier.padding(18.dp),verticalArrangement=Arrangement.spacedBy(12.dp)) {
+                                                Row(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
+                                                    listOf(option.background,option.surface,option.accent).forEach { value -> Box(Modifier.size(26.dp).background(Color(value),RoundedCornerShape(13.dp))) }
+                                                }
+                                                Text(option.name,color=Color.White,fontSize=17.sp,fontWeight=FontWeight.Bold)
+                                                Text(if(chosen) "Selected ✓" else "Tap to use",color=Color(option.accent),fontSize=14.sp)
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            Panel {
+                                Text("Workout preferences",fontSize=24.sp,fontWeight=FontWeight.Bold)
+                                WarmupOption(profile,enabled=active==null && !busy)
+                                val update by app.updates.state.collectAsState()
+                                OutlinedButton(onClick={startActivity(Intent(this@MainActivity,MaintenanceActivity::class.java))}) { Text(if(update.ready!=null) "Update available · Manage app" else "Updates & backup") }
+                            }
+                            Connections(profile)
+                        }
+                        else->Row { Column(Modifier.width(520.dp)) { Entertainment() } }
+                    }
+                    Spacer(Modifier.height(12.dp))
                 }
             }
         }
-        if(ending && active!=null) AlertDialog(onDismissRequest={ending=false},title={Text("End this workout?")},text={Text("Stop the belt and save to ${profile?.name ?: "your profile"}’s history and Garmin if connected, or discard without saving or uploading.")},confirmButton={Button(onClick={app.endWorkout();ending=false}) { Text("Stop & save") }},dismissButton={Row {
+        if(switching) AlertDialog(containerColor=Surface,onDismissRequest={switching=false},title={Text("Who’s working out?")},text={
+            Column(Modifier.verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(10.dp)) {
+                saved.profiles.forEach { p ->
+                    OutlinedButton(onClick={app.selectProfile(p.id);switching=false},enabled=active==null && !busy,modifier=Modifier.fillMaxWidth().height(56.dp)) { Text(p.name+if(p.id==profile?.id) "  •" else "",fontSize=20.sp) }
+                }
+            }
+        },confirmButton={TextButton(onClick={switching=false;adding=true},enabled=active==null && !busy) { Text("+ Add profile") }},dismissButton={TextButton(onClick={switching=false}) { Text("Close") }})
+        if(ending && active!=null) AlertDialog(containerColor=Surface,onDismissRequest={ending=false},title={Text("End this workout?")},text={Text("Stop the belt and save to ${profile?.name ?: "your profile"}’s history and Garmin if connected, or discard without saving or uploading.")},confirmButton={Button(onClick={app.endWorkout();ending=false}) { Text("Stop & save") }},dismissButton={Row {
             TextButton(onClick={app.endWorkout(save=false);ending=false}) { Text("End without saving") }
             TextButton(onClick={ending=false}) { Text("Keep going") }
         }})
-        if(adding) AlertDialog(onDismissRequest={adding=false},title={Text("New runner")},text={OutlinedTextField(value=name,onValueChange={if(it.length<=40) name=it},label={Text("Name")},singleLine=true)},confirmButton={Button(onClick={app.store.addProfile(name); app.selectProfile(app.store.state.value.selectedId!!); name=""; adding=false},enabled=name.trim().isNotEmpty()){Text("Create profile")}},dismissButton={TextButton(onClick={adding=false}){Text("Cancel")}})
-        notice?.let { AlertDialog(onDismissRequest={app.message.value=null},title={Text("OpenRun")},text={Text(it)},confirmButton={TextButton(onClick={app.message.value=null}){Text("OK")}}) }
+        if(adding) AlertDialog(containerColor=Surface,onDismissRequest={adding=false},title={Text("New runner")},text={OutlinedTextField(value=name,onValueChange={if(it.length<=40) name=it},label={Text("Name")},singleLine=true)},confirmButton={Button(onClick={app.store.addProfile(name); app.selectProfile(app.store.state.value.selectedId!!); name=""; adding=false},enabled=name.trim().isNotEmpty()){Text("Create profile")}},dismissButton={TextButton(onClick={adding=false}){Text("Cancel")}})
+        notice?.let { AlertDialog(containerColor=Surface,onDismissRequest={app.message.value=null},title={Text("OpenRun")},text={Text(it)},confirmButton={TextButton(onClick={app.message.value=null}){Text("OK")}}) }
+    }
+    @Composable private fun RecentTrails() {
+        val busy by app.controlBusy.collectAsState()
+        val active by app.active.collectAsState()
+        var trails by remember { mutableStateOf<List<SavedHike>>(emptyList()) }
+        var loading by remember { mutableStateOf(true) }
+        var failed by remember { mutableStateOf(false) }
+        LaunchedEffect(resumeGeneration.value) {
+            loading=true
+            try {
+                trails=kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { HikeLibrary(this@MainActivity).recent(5) }
+                failed=false
+            } catch(e:kotlinx.coroutines.CancellationException) { throw e }
+            catch(_:Exception) { failed=true }
+            finally { loading=false }
+        }
+        Panel {
+            Row(verticalAlignment=Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("RECENT TRAILS",color=Green,fontSize=12.sp,letterSpacing=2.sp)
+                    Text("Your next escape.",fontSize=24.sp,fontWeight=FontWeight.Bold)
+                }
+                TextButton(onClick={startActivity(Intent(this@MainActivity,OutdoorActivity::class.java))}) { Text("All trails & import") }
+            }
+            Text("Start after a 3-second countdown at 2 mph, or queue without moving the belt. Terrain limits: −6% to 40%. Your warm-up setting applies.",color=Muted,fontSize=14.sp)
+            when {
+                loading -> Text("Loading trails…",color=Muted)
+                failed -> Text("Could not load recent trails. Open All trails to try again.",color=Muted)
+                trails.isEmpty() -> Text("Download your first GPX in All trails to see it here.",color=Muted)
+                else -> trails.forEach { trail ->
+                    Surface(color=Background,shape=RoundedCornerShape(16.dp),modifier=Modifier.fillMaxWidth()) {
+                        Row(Modifier.padding(14.dp),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(18.dp)) {
+                            TrailThumbnail(trail.route,Modifier.width(100.dp).height(66.dp))
+                            Column(Modifier.weight(1f),verticalArrangement=Arrangement.spacedBy(6.dp)) {
+                                Text(trail.name,fontSize=19.sp,fontWeight=FontWeight.Bold)
+                                Text("${fmt(trail.route.distanceMeters/1609.344,2)} mi"+if(trail.route.hasElevation) " · Terrain following" else " · Missing elevation",color=Muted,fontSize=14.sp)
+                            }
+                            Button(enabled=active==null && !busy && trail.route.hasElevation,onClick={
+                                if(app.queueHike(trail,HikeLimits.MAX_INCLINE)) app.startHike()
+                            }) { Text("Start hike") }
+                            OutlinedButton(enabled=active==null && !busy && trail.route.hasElevation,onClick={
+                                if(app.queueHike(trail,HikeLimits.MAX_INCLINE)) {
+                                    val pkg=if(packageManager.getLaunchIntentForPackage("com.plexapp.android")!=null) "com.plexapp.android" else "com.netflix.mediaclient"
+                                    openEntertainment(pkg,"Plex")
+                                }
+                            }) { Text("Queue for Plex") }
+                        }
+                    }
+                }
+            }
+        }
     }
     @Composable private fun WarmupOption(profile:Profile,enabled:Boolean) {
         Row(verticalAlignment=Alignment.CenterVertically) {
@@ -314,9 +420,8 @@ class MainActivity: ComponentActivity() {
                     }
                 }
             }
-            WarmupOption(profile,enabled=!busy)
         }
-        if(scheduleSettings) AlertDialog(onDismissRequest={scheduleSettings=false},title={Text("Schedule & pace")},text={
+        if(scheduleSettings) AlertDialog(containerColor=Surface,onDismissRequest={scheduleSettings=false},title={Text("Schedule & pace")},text={
             Column(verticalArrangement=Arrangement.spacedBy(16.dp)) {
                 Text(cache?.let { "Last synced ${SimpleDateFormat("MMM d, h:mm a",Locale.getDefault()).apply { timeZone=java.util.TimeZone.getTimeZone(zone) }.format(Date(it.syncedAt))}" } ?: "No saved schedule",color=Muted)
                 refresh.error?.let { Text(it,color=MaterialTheme.colorScheme.error) }
@@ -326,7 +431,7 @@ class MainActivity: ComponentActivity() {
                 Button(enabled=!refresh.loading,onClick={refreshSchedule(true)}) { Text(if(refresh.loading) "Syncing…" else "Refresh Garmin") }
             }
         },confirmButton={TextButton(onClick={scheduleSettings=false}) { Text("Done") }})
-        if(editingZone) AlertDialog(onDismissRequest={editingZone=false},title={Text("Schedule time zone")},
+        if(editingZone) AlertDialog(containerColor=Surface,onDismissRequest={editingZone=false},title={Text("Schedule time zone")},
             text={ Column { Text("Use a region such as America/Denver, America/New_York, or Europe/London.")
                 OutlinedTextField(value=zoneInput,onValueChange={zoneInput=it},singleLine=true,label={Text("Time zone")}) } },
             confirmButton={Button(enabled=runCatching { java.time.ZoneId.of(zoneInput.trim()) }.isSuccess,onClick={
@@ -334,7 +439,7 @@ class MainActivity: ComponentActivity() {
                 editingZone=false
             }) { Text("Save") }},dismissButton={TextButton(onClick={editingZone=false}) { Text("Cancel") }})
         selected?.let { date ->
-            AlertDialog(onDismissRequest={selected=null},title={Text(date.format(java.time.format.DateTimeFormatter.ofPattern("EEEE, MMM d")))},
+            AlertDialog(containerColor=Surface,onDismissRequest={selected=null},title={Text(date.format(java.time.format.DateTimeFormatter.ofPattern("EEEE, MMM d")))},
                 text={ Column(Modifier.heightIn(max=580.dp).verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(14.dp)) {
                     val dayEntries=entries(date)
                     if(dayEntries.isEmpty()) Text("No workout in the saved schedule for this day. Manual and Zone 2 workouts are available on the home screen.")
@@ -367,14 +472,23 @@ class MainActivity: ComponentActivity() {
         if(run==null) Panel {
             Row(verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(24.dp)) {
                 Column(Modifier.weight(1f),verticalArrangement=Arrangement.spacedBy(6.dp)) {
-                    Text("Or go at your own pace.",fontSize=24.sp,fontWeight=FontWeight.Bold)
+                    Text("Start moving.",fontSize=24.sp,fontWeight=FontWeight.Bold)
                     Text("${if(t.receivedAt>0 && android.os.SystemClock.elapsedRealtime()-t.receivedAt<5000) "Treadmill connected" else "Waiting for treadmill"} · ${hr?.let { "♥ $it bpm" } ?: "Chest strap not connected"}",color=Muted)
                 }
-                OutlinedButton(onClick={startZoneTwo=false;start=true},enabled=!busy,modifier=Modifier.height(56.dp)) { Text("Manual workout") }
-                Button(onClick={startZoneTwo=true;start=true},enabled=verified && !busy && hr!=null,modifier=Modifier.height(56.dp)) { Text("Zone 2 · Watch & walk") }
+                Column(Modifier.width(444.dp),verticalArrangement=Arrangement.spacedBy(6.dp)) {
+                    Row(horizontalArrangement=Arrangement.spacedBy(24.dp),verticalAlignment=Alignment.Top) {
+                        OutlinedButton(onClick={startZoneTwo=false;start=true},enabled=!busy,modifier=Modifier.width(200.dp).height(64.dp)) { Text("Quick start",fontSize=19.sp) }
+                        Button(onClick={startZoneTwo=true;start=true},enabled=verified && !busy && hr!=null,modifier=Modifier.width(220.dp).height(64.dp)) { Text("Zone 2",fontSize=19.sp) }
+                    }
+                    val unavailable=when { busy->"Wait for controls to finish"; !verified->"Verify controls in Settings"; hr==null->"Connect chest strap"; else->null }
+                    Text(unavailable.orEmpty(),color=Muted,fontSize=13.sp,modifier=Modifier.width(220.dp).align(Alignment.End))
+                }
             }
-            Text("Zone 2: 120–140 bpm · 2–4 mph. Manual workouts follow your controls.",color=Muted,fontSize=13.sp)
-            if(!verified) Text("Verify treadmill controls in Connections to unlock Zone 2.",color=Muted,fontSize=13.sp)
+            Row(verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(24.dp)) {
+                WarmupOption(profile,enabled=!busy)
+                Text("Zone 2 · 120–140 bpm · 2–4 mph",color=Muted,fontSize=14.sp)
+            }
+            if(busy) Text("Quick start and warm-up settings are unavailable while controls are updating.",color=Muted,fontSize=13.sp)
         }
         if(run!=null) {
         Panel {
@@ -391,6 +505,16 @@ class MainActivity: ComponentActivity() {
                 Metric("TIME","%d:%02d".format(seconds/60,seconds%60),"elapsed")
             }
             Text("Estimated ascent  ${fmt((run?.ascentMeters ?: 0.0)*3.28084,0)} ft     ·     Descent  ${run?.descentMeters?.let { fmt(it*3.28084,0) } ?: "—"} ft",color=Muted,fontSize=14.sp)
+            Row(horizontalArrangement=Arrangement.spacedBy(12.dp)) {
+                OutlinedButton(onClick={app.adjustManual(true,-0.1)},enabled=canAdjust && (desiredSpeed ?: 0.0)>0.2) { Text("− Speed") }
+                OutlinedButton(onClick={app.adjustManual(true,0.1)},enabled=canAdjust && (desiredSpeed ?: app.manualMaxMph)<app.manualMaxMph) { Text("+ Speed") }
+                OutlinedButton(onClick={app.adjustManual(false,-0.5)},enabled=canAdjust && (desiredIncline ?: app.manualMinIncline)>app.manualMinIncline) { Text("− Incline") }
+                OutlinedButton(onClick={app.adjustManual(false,0.5)},enabled=canAdjust && (desiredIncline ?: app.manualMaxIncline)<app.manualMaxIncline) { Text("+ Incline") }
+            }
+            if(zoneEnabled) Row(verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(16.dp)) {
+                Text(zoneStatus,color=Green,modifier=Modifier.weight(1f))
+                TextButton(onClick={app.disableZone()}) { Text("Turn off auto adjustments") }
+            }
             val activeHike=app.hike
             val hikeStatus by app.hikeStatus.collectAsState()
             if(activeHike!=null) {
@@ -413,12 +537,7 @@ class MainActivity: ComponentActivity() {
             if(manualTargets.isNotEmpty()) Text("Requested: " + manualTargets.joinToString(" · ") {
                 if(it is Target.Speed) "${fmt(it.value,1)} mph" else "${fmt(it.value,1)}% incline"
             },color=Green)
-            Row(horizontalArrangement=Arrangement.spacedBy(12.dp)) {
-                OutlinedButton(onClick={app.adjustManual(true,-0.1)},enabled=canAdjust && (desiredSpeed ?: 0.0)>0.2) { Text("− Speed") }
-                OutlinedButton(onClick={app.adjustManual(true,0.1)},enabled=canAdjust && (desiredSpeed ?: app.manualMaxMph)<app.manualMaxMph) { Text("+ Speed") }
-                OutlinedButton(onClick={app.adjustManual(false,-0.5)},enabled=canAdjust && (desiredIncline ?: app.manualMinIncline)>app.manualMinIncline) { Text("− Incline") }
-                OutlinedButton(onClick={app.adjustManual(false,0.5)},enabled=canAdjust && (desiredIncline ?: app.manualMaxIncline)<app.manualMaxIncline) { Text("+ Incline") }
-            }
+
             Text(if(app.hike!=null) "Speed stays manual. Only incline changes hold terrain following for 60 seconds." else if(plannedName!=null) "Manual changes hold until the next interval. Incline capped at 3%." else "Manual changes hold for 60 seconds. Physical controls remain available.",fontSize=13.sp,color=Muted)
         }
         if(plannedName!=null) Panel {
@@ -426,26 +545,9 @@ class MainActivity: ComponentActivity() {
             Text(plannedStatus.orEmpty(),color=Green,fontSize=20.sp)
             Text("HR checks every 10 seconds · 30 seconds to settle after adjustments · ${fmt(app.manualMaxMph,1)} mph maximum · incline 1–3% before speed",color=Muted)
         }
-        if(plannedName==null && app.hike==null) Panel {
-            Text("AUTOMATIC HR CONTROL",color=Green,fontSize=12.sp,letterSpacing=2.sp)
-            Text("Zone 2 · Watch & walk",fontSize=27.sp,fontWeight=FontWeight.Bold)
-            Text("120–140 BPM    /    2–4 mph    /    up to 20% incline",fontSize=18.sp)
-            Text("Incline adjusts first in either direction. HR loss holds your settings while the workout continues.",color=Muted,fontSize=15.sp)
-            Text(zoneStatus,color=Green,fontSize=18.sp)
-            if(!verified) Text("Before enabling Zone 2, test Start, incline +/−, and Stop belt. Confirm the results under Connections.",color=Muted)
-            Row(horizontalArrangement=Arrangement.spacedBy(12.dp)) {
-                Button(onClick={
-                    if(zoneEnabled) app.disableZone()
-                    else if(run==null) { startZoneTwo=true; start=true }
-                    else app.enableZone()
-                },enabled=zoneEnabled || (verified && !paused && !busy && hr!=null)) {
-                    Text(if(zoneEnabled) "Turn automatic adjustments off" else if(run==null) "Start Zone 2 workout" else "Enable Zone 2")
-                }
-                if(!zoneEnabled && hr==null) Text("Connect your chest strap to start Zone 2.",color=Muted)
-            }
+
         }
-        }
-        if(start) AlertDialog(onDismissRequest={start=false},title={Text(if(startZoneTwo) "Start Zone 2 at 2 mph?" else "Start walking at 2 mph?")},text={Text("The belt starts after a 3-second countdown. Warm-up is ${if(profile.warmupEnabled) "on" else "off"}. " + if(startZoneTwo) "Zone 2 enables after the optional five-minute warm-up." else "Automatic HR adjustments stay off until you enable Zone 2.")},confirmButton={Button(onClick={start=false; app.startWorkout(withZoneTwo=startZoneTwo)}){Text("Start belt & workout")}},dismissButton={TextButton(onClick={start=false}){Text("Cancel")}})
+        if(start) AlertDialog(containerColor=Surface,onDismissRequest={start=false},title={Text(if(startZoneTwo) "Start Zone 2 at 2 mph?" else "Start walking at 2 mph?")},text={Text("The belt starts after a 3-second countdown. Warm-up is ${if(profile.warmupEnabled) "on" else "off"}. " + if(startZoneTwo) "Zone 2 enables after the optional five-minute warm-up." else "You control speed and incline throughout this workout.")},confirmButton={Button(onClick={start=false; app.startWorkout(withZoneTwo=startZoneTwo)}){Text("Start belt & workout")}},dismissButton={TextButton(onClick={start=false}){Text("Cancel")}})
 
     }
     @Composable private fun History(profile:Profile) {
@@ -454,16 +556,37 @@ class MainActivity: ComponentActivity() {
         var selectedRide by remember(profile.id) { mutableStateOf<Long?>(null) }
         val rides=saved.rides.filter { it.profileId==profile.id && it.status!="recording" }.sortedByDescending { it.id }
         if(rides.isEmpty()) Panel { Text("Your first workout starts here.",fontSize=23.sp); Text("Saved sessions for ${profile.name} will appear here.",color=Muted) }
-        rides.filter { selectedRide==null || it.id==selectedRide }.forEach { r -> Panel {
-            if(selectedRide!=null) TextButton(onClick={selectedRide=null}) { Text("← All workouts") }
-            Text(r.hikeName ?: r.plannedWorkout?.name ?: "Free workout",fontSize=24.sp,fontWeight=FontWeight.Bold)
-            Text(java.time.Instant.ofEpochMilli(r.startedAt).atOffset(java.time.ZoneOffset.ofTotalSeconds(r.utcOffsetSeconds)).format(java.time.format.DateTimeFormatter.ofPattern("EEE, MMM d · h:mm a",Locale.US)),fontSize=18.sp,color=Muted)
-            Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceBetween) { Metric("DURATION","${r.durationSec/60}:${"%02d".format(r.durationSec%60)}","min:sec"); Metric("DISTANCE",fmt(r.distanceMeters/1609.344,2),"mi"); Metric("AVG HR",r.samples.mapNotNull{it.heartRate}.takeIf{it.isNotEmpty()}?.average()?.toInt()?.toString() ?: "—","bpm"); Metric("ASCENT",fmt(r.ascentMeters*3.28084,0),"ft estimated"); Metric("DESCENT",r.descentMeters?.let { fmt(it*3.28084,0) } ?: "—","ft estimated") }
-            Text(if(r.status=="interrupted") "Interrupted session · recovered locally; not auto-uploaded" else garmin.uploads.firstOrNull{it.profileId==profile.id && it.rideId==r.id}?.let { "Garmin: ${it.status} · ${it.message.orEmpty()}" } ?: "Saved on this treadmill",color=Muted)
-            if(selectedRide==r.id) WorkoutHistoryDetails(r)
-            else OutlinedButton(onClick={selectedRide=r.id}) { Text("View workout") }
-        } }
+        rides.filter { selectedRide==null || it.id==selectedRide }.forEach { r ->
+            val title=r.hikeName ?: r.plannedWorkout?.name ?: "Free workout"
+            val date=java.time.Instant.ofEpochMilli(r.startedAt).atOffset(java.time.ZoneOffset.ofTotalSeconds(r.utcOffsetSeconds)).format(java.time.format.DateTimeFormatter.ofPattern("EEE, MMM d · h:mm a",Locale.US))
+            val upload=if(r.status=="interrupted") "Interrupted · recovered locally" else garmin.uploads.firstOrNull { it.profileId==profile.id && it.rideId==r.id }?.let { "Garmin: ${it.status}" } ?: "Saved locally"
+            if(selectedRide==null) Surface(color=Surface,shape=RoundedCornerShape(18.dp),modifier=Modifier.fillMaxWidth().clickable { selectedRide=r.id }) {
+                Row(Modifier.padding(22.dp),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(28.dp)) {
+                    Column(Modifier.weight(1f),verticalArrangement=Arrangement.spacedBy(6.dp)) {
+                        Text(title,fontSize=22.sp,fontWeight=FontWeight.Bold)
+                        Text("$date · $upload",color=Muted,fontSize=14.sp)
+                    }
+                    Text("${fmt(r.distanceMeters/1609.344,2)} mi",fontSize=24.sp,fontWeight=FontWeight.SemiBold)
+                    Text("${r.durationSec/60}:${"%02d".format(r.durationSec%60)}",fontSize=24.sp,modifier=Modifier.width(100.dp))
+                    Text("View ›",color=Green,fontSize=17.sp)
+                }
+            } else Panel {
+                TextButton(onClick={selectedRide=null}) { Text("← All workouts") }
+                Text(title,fontSize=28.sp,fontWeight=FontWeight.Bold)
+                Text(date,color=Muted,fontSize=17.sp)
+                Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceBetween) {
+                    Metric("DURATION","${r.durationSec/60}:${"%02d".format(r.durationSec%60)}","min:sec")
+                    Metric("DISTANCE",fmt(r.distanceMeters/1609.344,2),"mi")
+                    Metric("AVG HR",historySummary(r).averageHr?.toInt()?.toString() ?: "—","bpm")
+                    Metric("ASCENT",fmt(r.ascentMeters*3.28084,0),"ft estimated")
+                    Metric("DESCENT",r.descentMeters?.let { fmt(it*3.28084,0) } ?: "—","ft estimated")
+                }
+                Text(upload+ (garmin.uploads.firstOrNull { it.profileId==profile.id && it.rideId==r.id }?.message?.let { " · $it" } ?: ""),color=Muted)
+                WorkoutHistoryDetails(r)
+            }
+        }
     }
+
     @Composable private fun Connections(profile:Profile) {
         val hrStatus by app.heart.status.collectAsState()
         val devices by app.heart.devices.collectAsState()
@@ -502,26 +625,60 @@ class MainActivity: ComponentActivity() {
         val saved by app.store.state.collectAsState()
         val active by app.active.collectAsState()
         val controlBusy by app.controlBusy.collectAsState()
+        var deleting by remember { mutableStateOf<SavedWorkout?>(null) }
+        var preview by remember { mutableStateOf<SavedWorkout?>(null) }
+        var customLibrary by remember { mutableStateOf(true) }
         Panel {
-            Text("${profile.name}’s saved workouts",fontSize=24.sp,fontWeight=FontWeight.Bold)
+            Row(verticalAlignment=Alignment.CenterVertically) {
+                Text("${profile.name}’s saved workouts",fontSize=24.sp,fontWeight=FontWeight.Bold,modifier=Modifier.weight(1f))
+                Button(enabled=active==null && !controlBusy,onClick={startActivity(Intent(this@MainActivity,WorkoutBuilderActivity::class.java))}) { Text("+ Create workout") }
+            }
             WarmupOption(profile,enabled=active==null && !controlBusy)
-            Text("Optional five-minute warm-up, then adaptive running pace. HR adjusts incline 1–3% first, then speed within your chosen limit. Garmin’s prescribed warm-ups remain part of the workout. The belt stops at the end; you choose save or discard.",color=Muted)
-            Text("Re-import older saved sessions to retain their Garmin schedule details. Uploading a run does not yet confirm Garmin Coach credit.",color=Muted,fontSize=13.sp)
-            val plans=saved.workouts.filter { it.profileId==profile.id }
-            if(plans.isEmpty()) Text("Import a workout below, preview its steps, then save it here.",color=Muted)
+            if(active!=null || controlBusy) Text(if(active!=null) "End your current workout to create, edit or start another." else "Wait for treadmill controls to finish before changing workouts.",color=Muted)
+            Text("Build your own intervals or import from Garmin. Optional five-minute warm-up comes first. At the end, the belt stops and you choose save or discard.",color=Muted)
+            Row(horizontalArrangement=Arrangement.spacedBy(12.dp)) {
+                FilterChip(selected=customLibrary,onClick={customLibrary=true},label={Text("Custom workouts")})
+                FilterChip(selected=!customLibrary,onClick={customLibrary=false},label={Text("Garmin imports")})
+            }
+            val plans=saved.workouts.filter { it.profileId==profile.id && it.custom==customLibrary }
+            if(plans.isEmpty()) Text(if(customLibrary) "No custom workouts yet. Create your first interval plan above." else "No saved Garmin workouts. Import one below.",color=Muted)
             plans.forEach { plan ->
-                Row(verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(16.dp)) {
-                    Text("${plan.garminSource?.date?.let { "$it · " }.orEmpty()}${plan.name} · ${plan.steps.sumOf { it.seconds }/60} min · ${plan.steps.size} steps",Modifier.weight(1f))
-                    Text("Max ${fmt(plan.maxMph,1)} mph")
-                    OutlinedButton(enabled=active==null && !controlBusy && plan.maxMph>2.0,onClick={app.setPlannedMaxSpeed(plan.id,(plan.maxMph-0.5).coerceAtLeast(2.0))}) { Text("− Max") }
-                    OutlinedButton(enabled=active==null && !controlBusy && plan.maxMph<10.0,onClick={app.setPlannedMaxSpeed(plan.id,(plan.maxMph+0.5).coerceAtMost(10.0))}) { Text("+ Max") }
-                    Button(enabled=active==null && !controlBusy,onClick={app.startPlannedWorkout(plan); if(app.active.value!=null) onStarted()}) { Text("Start workout") }
-                }
+                Surface(color=Background,shape=RoundedCornerShape(16.dp),modifier=Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(20.dp),verticalArrangement=Arrangement.spacedBy(12.dp)) {
+                    Text("${plan.garminSource?.date?.let { "$it · " }.orEmpty()}${plan.name}",fontSize=21.sp,fontWeight=FontWeight.Bold)
+                    Text("${if(plan.custom) "Custom" else "Garmin"} · ${plan.durationLabel()} · ${plan.steps.size} intervals · Max ${fmt(plan.maxMph,1)} mph",color=Muted)
+                    Row(horizontalArrangement=Arrangement.spacedBy(12.dp)) {
+                        Button(enabled=active==null && !controlBusy,onClick={preview=plan}) { Text("View workout") }
+                        if(plan.custom) {
+                            OutlinedButton(enabled=active==null && !controlBusy,onClick={startActivity(Intent(this@MainActivity,WorkoutBuilderActivity::class.java).putExtra("workout",plan.id))}) { Text("Edit") }
+                            OutlinedButton(enabled=active==null && !controlBusy,onClick={startActivity(Intent(this@MainActivity,WorkoutBuilderActivity::class.java).putExtra("workout",plan.id).putExtra("copy",true))}) { Text("Duplicate") }
+                            TextButton(enabled=active==null && !controlBusy,onClick={deleting=plan}) { Text("Delete") }
+                        } else {
+                            OutlinedButton(enabled=active==null && !controlBusy && plan.maxMph>2.0,onClick={app.setPlannedMaxSpeed(plan.id,(plan.maxMph-0.5).coerceAtLeast(2.0))}) { Text("− Max") }
+                            OutlinedButton(enabled=active==null && !controlBusy && plan.maxMph<10.0,onClick={app.setPlannedMaxSpeed(plan.id,(plan.maxMph+0.5).coerceAtMost(10.0))}) { Text("+ Max") }
+                        }
+                    }
+                } }
             }
         }
+        preview?.let { plan -> AlertDialog(containerColor=Surface,onDismissRequest={preview=null},title={Text(plan.name)},text={
+            Column(Modifier.verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(12.dp)) {
+                Text("${plan.durationLabel()} · ${plan.steps.size} intervals · Max ${fmt(plan.maxMph,1)} mph",color=Green)
+                WarmupOption(profile,enabled=active==null && !controlBusy)
+                plan.steps.forEachIndexed { index,step ->
+                    Text("${index+1}. ${step.name}",fontWeight=FontWeight.Bold)
+                    Text((step.distanceMeters?.let { "${fmt(it/1609.344,2)} mi" } ?: "${step.seconds/60}m ${step.seconds%60}s")+
+                        (step.startMph?.let { " · ${fmt(it,1)} mph" } ?: "")+
+                        " · ${fmt(step.incline ?: plan.incline,1)}% incline"+
+                        (step.hrLow?.let { " · $it–${step.hrHigh} bpm" } ?: ""),color=Muted)
+                }
+                Text("The belt starts after a 3-second countdown.",color=Muted)
+            }
+        },confirmButton={Button(enabled=active==null && !controlBusy,onClick={preview=null;app.startPlannedWorkout(plan);if(app.active.value!=null) onStarted()}) { Text("Start workout") }},dismissButton={TextButton(onClick={preview=null}) { Text("Back") }}) }
+        deleting?.let { plan -> AlertDialog(containerColor=Surface,onDismissRequest={deleting=null},title={Text("Delete ${plan.name}?")},text={Text("This removes the saved template. Completed workout history stays intact.")},confirmButton={Button(onClick={app.deleteCustomWorkout(plan.id);deleting=null}) { Text("Delete workout") }},dismissButton={TextButton(onClick={deleting=null}) { Text("Cancel") }}) }
         val state by app.garmin.state.collectAsState()
         val account=state.accounts.firstOrNull { it.profileId==profile.id }
-        key(account?.email) {
+        if(!customLibrary) key(account?.email) {
             val scope=rememberCoroutineScope()
             var workouts by remember { mutableStateOf<List<GarminPlannedWorkout>?>(null) }
             var preview by remember { mutableStateOf<GarminWorkoutPreview?>(null) }
@@ -540,7 +697,7 @@ class MainActivity: ComponentActivity() {
                 Text("Garmin planned workouts",fontSize=24.sp,fontWeight=FontWeight.Bold)
                 Text("Preview upcoming workouts for ${profile.name}. This checks the current and next calendar month. Some adaptive Coach sessions may not be exposed by Garmin.",color=Muted)
                 Text("Import and save here; the belt only moves when you tap Start workout.",color=Green)
-                if(account==null || account.needsLogin) Text("Connect Garmin for this runner in Connections first.",color=Muted)
+                if(account==null || account.needsLogin) Text("Connect Garmin for this runner in Settings first.",color=Muted)
                 Button(enabled=!busy && account!=null && !account.needsLogin,onClick={load {
                     preview=null; workouts=null
                     workouts=app.garmin.plannedWorkouts(profile.id)
@@ -559,7 +716,7 @@ class MainActivity: ComponentActivity() {
                 Text("${workout.sport} · Garmin preview",color=Muted)
                 workout.steps.forEach { Text(it,fontSize=18.sp) }
                 workout.executionIssue?.let { Text(it,color=Muted) }
-                Button(enabled=workout.executionIssue==null && workout.executableSteps.isNotEmpty(),onClick={app.savePlannedWorkout(workout)}) { Text("Save as custom workout") }
+                Button(enabled=workout.executionIssue==null && workout.executableSteps.isNotEmpty(),onClick={app.savePlannedWorkout(workout)}) { Text("Save to Garmin imports") }
             } }
         }
     }

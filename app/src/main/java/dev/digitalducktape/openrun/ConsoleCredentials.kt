@@ -24,7 +24,7 @@ object ConsoleCredentials {
         val stored=file(context)
         if(stored.baseFile.exists()) return stored.openRead().use { parse(it).getValue(name) }
         if(BuildConfig.DEBUG) return context.assets.open("certs/$name").use { it.readBytes() }
-        error("Import console credentials in Connections before using treadmill controls.")
+        error("Import console credentials in Settings before using treadmill controls.")
     }
     internal fun parse(input:InputStream):Map<String,ByteArray> {
         val found=mutableMapOf<String,ByteArray>()

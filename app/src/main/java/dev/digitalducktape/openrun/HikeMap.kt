@@ -4,6 +4,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -39,8 +40,9 @@ internal class TrailGeometry(val route:TrailPreview) {
     val geometry=remember(hike.id) { TrailGeometry(hike.route) }
     val traveled=distance.coerceIn(0.0,geometry.length)
     val (index,position)=geometry.position(traveled)
-    val green=Color(0xFFB7EF79)
-    Column(Modifier.fillMaxWidth().background(Color(0xFF101713),RoundedCornerShape(18.dp)).padding(if(compact) 12.dp else 20.dp),verticalArrangement=Arrangement.spacedBy(if(compact) 6.dp else 10.dp)) {
+    val palette=MaterialTheme.colorScheme
+    val green=palette.primary
+    Column(Modifier.fillMaxWidth().background(palette.background,RoundedCornerShape(18.dp)).padding(if(compact) 12.dp else 20.dp),verticalArrangement=Arrangement.spacedBy(if(compact) 6.dp else 10.dp)) {
         Text(hike.name,fontSize=if(compact) 21.sp else 25.sp,fontWeight=FontWeight.Bold)
         Text("${if(warming) "WARM-UP" else if(paused) "PAUSED" else "TRAIL PROGRESS"} · %.2f / %.2f mi · %.2f mi remaining".format(traveled/1609.344,geometry.length/1609.344,(geometry.length-traveled)/1609.344),color=green)
         Canvas(Modifier.fillMaxWidth().height(if(compact) 150.dp else 220.dp).semantics { contentDescription="${hike.name} trail map. ${(traveled/geometry.length*100).toInt()} percent complete. White marker is your position." }) {
@@ -59,10 +61,10 @@ internal class TrailGeometry(val route:TrailPreview) {
             drawPath(covered,green,style=Stroke(5.dp.toPx()))
             drawCircle(green,5.dp.toPx(),xy(pts.first()))
             drawCircle(Color(0xFFDFAD65),5.dp.toPx(),xy(pts.last()))
-            drawCircle(Color(0xFF101713),11.dp.toPx(),marker)
+            drawCircle(palette.background,11.dp.toPx(),marker)
             drawCircle(Color.White,7.dp.toPx(),marker)
         }
-        if(!compact) Text("White: you · Green: completed · Gray: remaining · Route outline from GPX",color=Color(0xFF9EAEA1),fontSize=13.sp)
+        if(!compact) Text("White: you · Accent: completed · Gray: remaining · Route outline from GPX",color=palette.onSurfaceVariant,fontSize=13.sp)
         if(hike.route.hasElevation) {
             val points=hike.route.points
             val low=remember(hike.id) { points.minOf { it.elevation!! } }
@@ -70,7 +72,7 @@ internal class TrailGeometry(val route:TrailPreview) {
             val gain=remember(hike.id) { points.zipWithNext().sumOf { (a,b)->(b.elevation!!-a.elevation!!).coerceAtLeast(0.0) } }
             Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceBetween) {
                 Text("ELEVATION PROFILE",color=green,fontSize=13.sp)
-                Text("GPX gain ≈ %.0f ft · elevation %.0f–%.0f ft".format(gain*3.28084,low*3.28084,high*3.28084),color=Color(0xFF9EAEA1),fontSize=13.sp)
+                Text("GPX gain ≈ %.0f ft · elevation %.0f–%.0f ft".format(gain*3.28084,low*3.28084,high*3.28084),color=palette.onSurfaceVariant,fontSize=13.sp)
             }
             Canvas(Modifier.fillMaxWidth().height(if(compact) 85.dp else 130.dp).semantics {
                 contentDescription="Elevation profile by trail distance. Current route elevation %.0f feet. Estimated total GPX gain %.0f feet.".format((position.elevation ?: low)*3.28084,gain*3.28084)
@@ -89,14 +91,35 @@ internal class TrailGeometry(val route:TrailPreview) {
                     drawPath(line,green,style=Stroke(3.dp.toPx()))
                 }
                 drawLine(Color.White.copy(alpha=0.5f),Offset(marker.x,pad),Offset(marker.x,baseline),1.dp.toPx())
-                drawCircle(Color(0xFF101713),7.dp.toPx(),marker)
+                drawCircle(palette.background,7.dp.toPx(),marker)
                 drawCircle(Color.White,4.dp.toPx(),marker)
             }
             Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceBetween) {
-                Text("0 mi",fontSize=12.sp,color=Color(0xFF9EAEA1))
-                Text("%.2f mi".format(geometry.length/1609.344/2),fontSize=12.sp,color=Color(0xFF9EAEA1))
-                Text("%.2f mi".format(geometry.length/1609.344),fontSize=12.sp,color=Color(0xFF9EAEA1))
+                Text("0 mi",fontSize=12.sp,color=palette.onSurfaceVariant)
+                Text("%.2f mi".format(geometry.length/1609.344/2),fontSize=12.sp,color=palette.onSurfaceVariant)
+                Text("%.2f mi".format(geometry.length/1609.344),fontSize=12.sp,color=palette.onSurfaceVariant)
             }
         }
+    }
+}
+
+/** Small offline route preview for the trail library; never sends control commands. */
+@Composable internal fun TrailThumbnail(route:TrailPreview,modifier:Modifier=Modifier) {
+    val palette=MaterialTheme.colorScheme
+    val points=remember(route) {
+        val minY=route.points.minOf { it.latitude }; val maxY=route.points.maxOf { it.latitude }
+        val minX=route.points.minOf { it.longitude }
+        val cosine=cos(Math.toRadians((minY+maxY)/2))
+        route.points.map { (it.longitude-minX)*cosine to maxY-it.latitude }
+    }
+    Canvas(modifier.background(palette.background,RoundedCornerShape(14.dp)).semantics { contentDescription="Trail route preview" }) {
+        val inset=14.dp.toPx()
+        val w=points.maxOf { it.first }; val h=points.maxOf { it.second }
+        val scale=minOf((size.width-2*inset)/w.coerceAtLeast(.000001),(size.height-2*inset)/h.coerceAtLeast(.000001))
+        fun position(p:Pair<Double,Double>)=Offset(((size.width-w*scale)/2+p.first*scale).toFloat(),((size.height-h*scale)/2+p.second*scale).toFloat())
+        val path=Path()
+        points.forEachIndexed { i,p -> val q=position(p);if(i==0) path.moveTo(q.x,q.y) else path.lineTo(q.x,q.y) }
+        drawPath(path,palette.primary,style=Stroke(3.dp.toPx()))
+        drawCircle(Color.White,4.dp.toPx(),position(points.first()))
     }
 }

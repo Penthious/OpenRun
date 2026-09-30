@@ -113,7 +113,7 @@ class OpenRunApplication : Application() {
                 } else if(active.value!=null && planned!=null) {
                     val guide=planned!!
                     val t=treadmill.telemetry.value
-                    val target=guide.tick(SystemClock.elapsedRealtime(),t,heart.bpm.value,isFresh(t),paused.value,controlBusy.value)
+                    val target=guide.tick(SystemClock.elapsedRealtime(),t,heart.bpm.value,isFresh(t),paused.value,controlBusy.value,active.value!!.distanceMeters)
                     plannedStatus.value=guide.status
                     if(guide.complete && !guideFinishHandled) {
                         guideFinishHandled=true
@@ -302,7 +302,7 @@ class OpenRunApplication : Application() {
     }
     fun startWorkout(withZoneTwo: Boolean = false) {
         if(active.value!=null || controlBusy.value) return
-        if(withZoneTwo && !controlsVerified.value) { message.value="Verify treadmill controls under Connections first."; return }
+        if(withZoneTwo && !controlsVerified.value) { message.value="Verify treadmill controls under Settings first."; return }
         if(withZoneTwo && heart.bpm.value==null) { message.value="Connect your chest strap before starting Zone 2."; return }
         val t=treadmill.telemetry.value
         if(!isFresh(t) || t.incline==null || t.incline !in 0.0..20.0) { message.value="Connect the treadmill and set incline between 0% and 20% first."; return }
@@ -365,13 +365,18 @@ class OpenRunApplication : Application() {
             error==null
         }
     }
+    fun setColorScheme(id:String) {
+        if(runPalettes.none { it.id==id }) return
+        val owner=store.state.value.selectedId ?: return
+        store.update { s -> s.copy(profiles=s.profiles.map { if(it.id==owner) it.copy(colorScheme=id) else it }) }
+    }
     fun setWarmup(enabled:Boolean) {
         if(active.value!=null || controlBusy.value) return
         val owner=store.state.value.selectedId ?: return
         store.update { s -> s.copy(profiles=s.profiles.map { if(it.id==owner) it.copy(warmupEnabled=enabled) else it }) }
     }
-    private fun beginWarmup(pace:Double,ceiling:Int?,zoneAfter:Boolean=false) {
-        warmup=WarmupGuide(pace,ceiling); warmingUp.value=true; warmupStatus.value="Warm-up · 5:00"; zoneAfterWarmup=zoneAfter
+    private fun beginWarmup(pace:Double,ceiling:Int?,zoneAfter:Boolean=false,requiresHeartRate:Boolean=true) {
+        warmup=WarmupGuide(pace,ceiling,requiresHeartRate); warmingUp.value=true; warmupStatus.value="Warm-up · 5:00"; zoneAfterWarmup=zoneAfter
     }
     fun skipWarmup() {
         if(warmup==null || controlBusy.value || paused.value) return
@@ -382,7 +387,7 @@ class OpenRunApplication : Application() {
         warmup=null; warmingUp.value=false; warmupStatus.value=null
         hikeDistanceOffset=active.value?.distanceMeters ?: 0.0
         hike?.resume(SystemClock.elapsedRealtime())
-        planned?.resume(SystemClock.elapsedRealtime())
+        planned?.resume(SystemClock.elapsedRealtime(),active.value?.distanceMeters)
         if(zoneAfterWarmup) { zoneAfterWarmup=false; enableZoneWhenReady(warmedUp=true) }
     }
     fun setScheduledMax(profileId:Long,entry:ScheduleEntry,max:Double) {
@@ -414,17 +419,35 @@ class OpenRunApplication : Application() {
         if(active.value!=null || controlBusy.value || !maxMph.isFinite() || maxMph !in 2.0..10.0) return
         val owner=store.state.value.selectedId ?: return
         store.update { state -> state.copy(workouts=state.workouts.map {
-            if(it.id==id && it.profileId==owner) it.copy(maxMph=maxMph) else it
+            if(it.id==id && it.profileId==owner && (!it.custom || it.steps.all { step -> (step.startMph ?: 2.0)<=maxMph })) it.copy(maxMph=maxMph) else it
         }) }
+    }
+    fun saveCustomWorkout(workout:SavedWorkout) {
+        check(active.value==null && !controlBusy.value && !maintenance.value) { "End your workout before saving a plan." }
+        check(workout.profileId==store.state.value.selectedId && workout.custom) { "Select the original runner before saving." }
+        PlannedWorkout(workout)
+        store.update { state ->
+            val previous=state.workouts.firstOrNull { it.id==workout.id }
+            check(previous==null || (previous.custom && previous.profileId==workout.profileId))
+            state.copy(workouts=state.workouts.filterNot { it.id==workout.id }+workout)
+        }
+    }
+    fun deleteCustomWorkout(id:String) {
+        if(active.value!=null || controlBusy.value || maintenance.value) return
+        val owner=store.state.value.selectedId ?: return
+        store.update { state -> state.copy(workouts=state.workouts.filterNot { it.id==id && it.profileId==owner && it.custom }) }
     }
     fun startPlannedWorkout(original: SavedWorkout) {
         val saved=preparePlan(original)
         if(active.value!=null || controlBusy.value || saved.profileId!=store.state.value.selectedId) return
-        if(!controlsVerified.value) { message.value="Verify treadmill controls under Connections first."; return }
-        if(heart.bpm.value==null) { message.value="Connect your chest strap before starting the guide."; return }
+        if(!controlsVerified.value) { message.value="Verify treadmill controls under Settings first."; return }
+        if((!saved.custom || saved.steps.any { it.hrLow!=null }) && heart.bpm.value==null) { message.value="Connect your chest strap before starting this HR-guided workout."; return }
         val t=treadmill.telemetry.value
         if(!isFresh(t) || t.mph==null || t.mph>0.05 || t.incline==null || t.incline !in 0.0..3.0) {
             message.value="Stop the belt and set incline between 0% and 3% before starting this running workout."; return
+        }
+        if(saved.steps.any { it.distanceMeters!=null } && (t.meters==null || !t.meters.isFinite())) {
+            message.value="Connect treadmill distance data before starting a distance-based workout."; return
         }
         val guide=runCatching { PlannedWorkout(saved) }.getOrElse { message.value="This saved workout has unsupported settings."; return }
         startRecording(saved)
@@ -434,14 +457,14 @@ class OpenRunApplication : Application() {
         plannedStatus.value="Starting ${saved.name}"
         if(store.state.value.profiles.firstOrNull { it.id==saved.profileId }?.warmupEnabled==true) {
             val first=saved.steps.first()
-            beginWarmup(first.startMph ?: 6.0,first.hrHigh)
+            beginWarmup(first.startMph ?: 6.0,first.hrHigh,requiresHeartRate=!saved.custom || saved.steps.any { it.hrLow!=null })
         }
         startForegroundService(Intent(this,WorkoutService::class.java).setAction("record"))
         performControl {
             controlStatus.value="Starting ${saved.name} at 2 mph in 3 seconds…"; delay(3000)
             glass.prepareToRun()
             if(!applyTarget(Target.Speed(2.0))) { guide.halt("Start interrupted · pause and resume to continue"); return@performControl }
-            if(warmup!=null) warmup?.resume(SystemClock.elapsedRealtime()) else guide.resume(SystemClock.elapsedRealtime()); paused.value=false
+            if(warmup!=null) warmup?.resume(SystemClock.elapsedRealtime()) else guide.resume(SystemClock.elapsedRealtime(),active.value?.distanceMeters); paused.value=false
         }
     }
     fun queueHike(saved:SavedHike,maxIncline:Double):Boolean {
@@ -453,7 +476,7 @@ class OpenRunApplication : Application() {
     fun startHike() {
         val selected=pendingHike.value ?: return
         if(active.value!=null || controlBusy.value || selected.profileId!=store.state.value.selectedId) return
-        if(!controlsVerified.value) { message.value="Verify treadmill controls under Connections first.";return }
+        if(!controlsVerified.value) { message.value="Verify treadmill controls under Settings first.";return }
         val t=treadmill.telemetry.value
         if(!isFresh(t) || t.mph==null || t.mph>0.05 || t.incline==null || t.incline !in HikeLimits.MIN_INCLINE..selected.maxIncline) {
             message.value="Stop the belt and set incline within this hike’s limit before starting.";return
@@ -507,7 +530,7 @@ class OpenRunApplication : Application() {
             controlStatus.value="Resuming in 3 seconds…"; delay(3000)
             glass.prepareToRun()
             if(!applyTarget(Target.Speed(resumeMph))) return@performControl
-            if(warmup!=null) warmup?.resume(SystemClock.elapsedRealtime()) else planned?.resume(SystemClock.elapsedRealtime())
+            if(warmup!=null) warmup?.resume(SystemClock.elapsedRealtime()) else planned?.resume(SystemClock.elapsedRealtime(),active.value?.distanceMeters)
             hike?.resume(SystemClock.elapsedRealtime())
             paused.value=false
             if(resumeZone && heart.bpm.value!=null) { zone.enable(SystemClock.elapsedRealtime()); zoneEnabled.value=true; zoneStatus.value=zone.status }

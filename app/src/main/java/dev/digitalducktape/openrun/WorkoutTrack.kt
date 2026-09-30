@@ -4,6 +4,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -33,9 +34,10 @@ internal fun trackProgress(distanceMeters:Double):TrackProgress {
 /** Position comes exclusively from recorded distance; pauses and telemetry loss cannot advance it. */
 @Composable internal fun WorkoutTrack(distanceMeters:Double,paused:Boolean,title:String) {
     val progress=trackProgress(distanceMeters)
-    val green=Color(0xFFB7EF79)
-    val muted=Color(0xFF9EAEA1)
-    Row(Modifier.fillMaxWidth().background(Color(0xFF101713),RoundedCornerShape(18.dp)).padding(20.dp),
+    val palette=MaterialTheme.colorScheme
+    val green=palette.primary
+    val muted=palette.onSurfaceVariant
+    Row(Modifier.fillMaxWidth().background(palette.background,RoundedCornerShape(18.dp)).padding(20.dp),
         verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(28.dp)) {
         Box(Modifier.weight(1f).height(240.dp),contentAlignment=Alignment.Center) {
             Canvas(Modifier.fillMaxSize().semantics {
@@ -62,7 +64,7 @@ internal fun trackProgress(distanceMeters:Double):TrackProgress {
                 drawPath(covered,green.copy(alpha=.6f),style=Stroke(10.dp.toPx()))
                 drawLine(Color.White,Offset(center,bottom-16.dp.toPx()),Offset(center,bottom+16.dp.toPx()),3.dp.toPx())
                 val position=measure.getPosition(measure.length*progress.fraction)
-                drawCircle(Color(0xFF101713),12.dp.toPx(),position)
+                drawCircle(palette.background,12.dp.toPx(),position)
                 drawCircle(if(paused) muted else green,8.dp.toPx(),position)
             }
             Column(horizontalAlignment=Alignment.CenterHorizontally) {

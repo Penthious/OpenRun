@@ -11,8 +11,8 @@ android {
         applicationId = "dev.digitalducktape.openrun"
         minSdk = 28
         targetSdk = 34
-        versionCode = 37
-        versionName = "0.2.35"
+        versionCode = 49
+        versionName = "0.2.47"
     }
     // Only local debug builds may package developer credentials.
     sourceSets.getByName("main").assets.setSrcDirs(emptyList<String>())

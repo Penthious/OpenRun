@@ -43,8 +43,8 @@ class GarminSyncManager(
     private suspend fun <T> readWorkouts(profileId: Long, read: suspend (GarminTokens) -> T): T = withContext(Dispatchers.IO) {
         lock.withLock {
             var current = _state.value.accounts.firstOrNull { it.profileId == profileId }
-                ?: throw GarminFailure("Connect Garmin for this runner in Connections first.")
-            if (current.needsLogin) throw GarminFailure("Reconnect Garmin in Connections first.")
+                ?: throw GarminFailure("Connect Garmin for this runner in Settings first.")
+            if (current.needsLogin) throw GarminFailure("Reconnect Garmin in Settings first.")
             suspend fun refresh() {
                 current = current.copy(tokens = api.refresh(current.tokens))
                 account(current)

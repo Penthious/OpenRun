@@ -42,7 +42,7 @@ privileged mode, Android debugging, OpenPelo installation and local credential
 import. The [release guide](docs/RELEASING.md) explains GitHub Actions and signing.
 
 Release builds exclude console credentials even when local debug assets exist.
-Import your own credential ZIP under Connections before using hardware controls.
+Import your own credential ZIP under Settings before using hardware controls.
 Debug builds may still package local developer credentials and must stay private.
 
 ## Requirements
@@ -93,6 +93,13 @@ data; uninstalling deletes local data.
 inside debug APKs even though Git ignores them. Release builds exclude those assets. Do not attach such APKs to
 GitHub releases, issues or CI artifacts.
 
+## Custom workouts
+
+Choose a runner, then **Workouts → Create workout** to build reusable
+time- or distance-based intervals with speed, incline and optional HR targets.
+Edit, duplicate and reorder intervals; save separate templates for each runner.
+See [custom workouts](docs/CUSTOM_WORKOUTS.md) for limits and execution behavior.
+
 ## Updates and backups
 
 Open **Updates & backup** in the sidebar. OpenRun checks published GitHub
@@ -103,14 +110,14 @@ See [updates, backup migration and local signed builds](docs/UPDATES_AND_BACKUPS
 
 ## First run
 
-1. Create a runner profile and pair a chest strap under **Connections**.
+1. Create a runner profile and pair a chest strap under **Settings**.
    Android 9 requires Bluetooth/location permissions and Location enabled
    for BLE scanning.
 2. Confirm NordicFTMS is connected. Grant **Display over other apps** for
    the entertainment overlay.
 3. At the treadmill, verify Start, small speed/incline adjustments, Pause,
    Resume, End and the physical Stop/safety key. Confirm control verification
-   under Connections before enabling guided HR workouts.
+   under Settings before enabling guided HR workouts.
 4. Optionally connect Garmin and confirm the runner's schedule time zone.
    Schedule dates use this setting rather than the console time zone.
 5. Choose a workout in OpenRun, or open a player and use the floating menu.
@@ -244,3 +251,46 @@ The Android 9 Downloads scanner keeps a local hike library. Start a hike directl
 or queue it, open Plex, and start from the floating menu. Terrain adjusts incline
 within your chosen cap while speed stays manual. See [Outdoor Trails](docs/OUTDOOR_TRAILS.md)
 for setup and control behavior.
+
+### Progress dashboard
+
+Home includes a weekly summary for the selected runner: saved workout count, time, distance and climbing. Tap the card below entertainment to open Progress.
+
+Open **Progress** for the selected runner’s weekly distance, workout time,
+ascent and descent, eight-week trends and personal records. Tap a chart column
+to select a week. Weeks begin Monday in that profile’s schedule timezone.
+Only completed workouts saved in OpenRun are included; imported Garmin history
+used for pace calibration is not included in these totals.
+
+The base-pace comparison uses workouts with “Base” in their name, steady running
+at 0–1% incline, and a selected 10-bpm heart-rate band. Each four-week period
+requires at least two qualifying runs with three steady minutes each. Warm-up
+and recovery are excluded, and runs count equally. The recent period includes
+the current partial week. This is a comparison, not a change to workout targets.
+Older workouts without descent show unknown/partial totals. A fastest-mile
+record requires continuous distance samples without pauses or telemetry gaps.
+
+### Finding your way around
+
+Use the profile picker at the top left to switch runners. **Home** puts Quick
+Start, Zone 2, today’s Garmin plan and entertainment together. **Workouts** holds
+saved intervals and Garmin imports; preview a saved workout before starting it.
+**Trails** opens your hiking library. **Progress** has Overview and Workout
+history tabs. **Settings** contains devices, Garmin, warm-up preferences and
+updates/backups. Pause, End and Stop Belt stay visible during a workout; the
+Watch button opens entertainment without losing access to your live session.
+
+History now opens as compact rows under **Progress → Workout history**; tap a
+row for detailed charts. **Workouts** separates Custom workouts and Garmin
+imports. **Trails** shows route previews and GPX elevation totals; choose View
+trail, then Start hike or Queue for Plex. Queueing opens Plex without starting
+the belt, and the overlay starts the queued hike when you are ready.
+
+Home also shows up to five recently imported trails beneath the Garmin schedule.
+Use Start hike or Queue for Plex directly on the Home card. The Trails library
+remains the place to import and browse all routes. Live manual workouts do not
+show Zone 2 setup; select Zone 2 from Home before starting instead.
+
+Choose **Settings → Color scheme** to personalize the selected runner’s UI.
+Charcoal & lime, Midnight blue, Forest and Plum save automatically per profile,
+including in app backups. Existing profiles default to Charcoal & lime.

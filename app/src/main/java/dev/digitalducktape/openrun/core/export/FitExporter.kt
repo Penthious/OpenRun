@@ -39,7 +39,8 @@ object FitExporter {
             plan.steps.forEachIndexed { i, step ->
                 encoder.write(WorkoutStepMesg().apply {
                     messageIndex = i; wktStepName = step.name
-                    durationType = WktStepDuration.TIME; durationTime = step.seconds.toFloat()
+                    if(step.distanceMeters!=null) { durationType = WktStepDuration.DISTANCE; durationDistance = step.distanceMeters.toFloat() }
+                    else { durationType = WktStepDuration.TIME; durationTime = step.seconds.toFloat() }
                     intensity = when(step.name.lowercase()) {
                         "warmup" -> Intensity.WARMUP
                         "cooldown" -> Intensity.COOLDOWN
@@ -51,6 +52,10 @@ object FitExporter {
                         targetType = WktStepTarget.SPEED; targetSpeedZone = 0L
                         customTargetSpeedLow = (step.paceLowMph*.44704).toFloat()
                         customTargetSpeedHigh = (step.paceHighMph*.44704).toFloat()
+                    } else if (plan.custom && step.hrLow==null && step.startMph!=null) {
+                        targetType = WktStepTarget.SPEED; targetSpeedZone = 0L
+                        customTargetSpeedLow = (step.startMph*.44704).toFloat()
+                        customTargetSpeedHigh = (step.startMph*.44704).toFloat()
                     } else if (step.hrLow != null && step.hrHigh != null) {
                         targetType = WktStepTarget.HEART_RATE; targetHrZone = 0L
                         customTargetHeartRateLow = step.hrLow + WorkoutHr.BPM_OFFSET
